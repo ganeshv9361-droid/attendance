@@ -147,22 +147,22 @@ export default function Login({ onLoginSuccess }) {
               type="text"
               value={serverUrl}
               onChange={(e) => handleSaveServerUrl(e.target.value)}
-              placeholder="http://10.138.117.168:5000"
+              placeholder="https://attendance-r69o.onrender.com"
               style={{ fontSize: '0.85rem', padding: '8px 10px' }}
             />
             <button onClick={testServerConnection} className="btn-secondary" style={{ padding: '8px 14px', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
               Test
             </button>
           </div>
-          {pingStatus === 'testing' && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Connecting to server...</span>}
+          {pingStatus === 'testing' && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Connecting to cloud server...</span>}
           {pingStatus === 'success' && (
             <span style={{ fontSize: '0.78rem', color: 'var(--present-color)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <CheckCircle2 size={14} /> Connected successfully to EduTrack server!
+              <CheckCircle2 size={14} /> Connected successfully to EduTrack Cloud!
             </span>
           )}
           {pingStatus === 'failed' && (
             <span style={{ fontSize: '0.78rem', color: 'var(--absent-color)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <AlertCircle size={14} /> Connection failed. Check Wi-Fi & IP.
+              <AlertCircle size={14} /> Connection failed. Check Internet or Cloud URL.
             </span>
           )}
         </div>

@@ -1,8 +1,7 @@
 // API Configuration & Safe Fetch for Web and Android APK
 
-// Default Cloud Server URL or local development fallback
-// Once deployed to Render, set your URL here (e.g. 'https://edutrack-api.onrender.com')
-export const DEFAULT_SERVER_URL = 'http://10.138.117.168:5000';
+// Default Cloud Server URL on Render
+export const DEFAULT_SERVER_URL = 'https://attendance-r69o.onrender.com';
 
 export function getApiBaseUrl() {
   const saved = localStorage.getItem('edutrack_server_url');
