@@ -526,10 +526,9 @@ app.post('/api/attendance/mark', async (req, res) => {
       if (qrData) {
         try {
           const parsed = typeof qrData === 'string' ? JSON.parse(qrData) : qrData;
-          targetStudentId = parsed.studentId || parsed.id;
+          targetStudentId = parsed.studentId || parsed.id || parsed.student_id;
         } catch {
-          // If raw string is directly student ID
-          targetStudentId = qrData;
+          targetStudentId = typeof qrData === 'string' ? qrData.trim() : qrData;
         }
       }
 
@@ -537,16 +536,26 @@ app.post('/api/attendance/mark', async (req, res) => {
         return res.status(400).json({ error: 'Valid Student ID or QR code is required' });
       }
 
-      const student = await get('SELECT * FROM students WHERE id = ?', [targetStudentId]);
+      let student = await get('SELECT * FROM students WHERE id = ?', [targetStudentId]);
+      if (!student && qrData) {
+        student = await get('SELECT * FROM students WHERE qr_token = ? OR id = ?', [qrData, targetStudentId]);
+      }
+
       if (!student) {
         return res.status(404).json({ error: `Student with ID "${targetStudentId}" not found in database` });
       }
 
-      // If classId specified, check student class
-      if (classId && student.class_id !== classId) {
-        return res.status(400).json({
-          error: `Student ${student.name} belongs to ${student.class_id}, not ${classId}`
-        });
+      // Check student class (case-insensitive and resilient to name vs id)
+      if (classId && student.class_id && student.class_id.trim().toLowerCase() !== classId.trim().toLowerCase()) {
+        const classMatch = await get(
+          'SELECT id FROM classes WHERE (id = ? OR LOWER(name) = LOWER(?)) AND (id = ? OR LOWER(name) = LOWER(?))',
+          [student.class_id, student.class_id, classId, classId]
+        );
+        if (!classMatch) {
+          return res.status(400).json({
+            error: `Student ${student.name} belongs to "${student.class_id}", but active session is for "${classId}".`
+          });
+        }
       }
 
       // Check if already marked present
