@@ -3,13 +3,26 @@ import cors from 'cors';
 import QRCode from 'qrcode';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { fileURLToPath } from 'url';
-import { run, get, all, initDatabase } from './database.js';
+import { run, get, all, initDatabase, isCloudMode } from './database.js';
 import { generateDailyExcelWorkbook } from './excelExport.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.resolve(__dirname, 'public');
+
+export function getLocalIpAddress() {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return 'localhost';
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,6 +57,20 @@ app.get('/api/health', (req, res) => {
     service: 'edutrack-campus-api',
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
+  });
+});
+
+// Server info endpoint (provides Wi-Fi IP and database mode for web and mobile)
+app.get('/api/server-info', (req, res) => {
+  const localIp = getLocalIpAddress();
+  res.json({
+    status: 'ok',
+    service: 'edutrack-campus-api',
+    localIp,
+    port: PORT,
+    wifiUrl: `http://${localIp}:${PORT}`,
+    isCloudMode,
+    database: isCloudMode ? 'Cloud PostgreSQL / Supabase' : 'Local SQLite (attendance.db - Offline)'
   });
 });
 
@@ -172,14 +199,30 @@ app.post('/api/teachers', async (req, res) => {
       return res.status(400).json({ error: 'Username, password, and full name are required' });
     }
 
+    let cleanClassId = assignedClassId ? assignedClassId.trim() : null;
+    if (cleanClassId) {
+      const existingClass = await get('SELECT id FROM classes WHERE id = ? OR LOWER(name) = LOWER(?)', [cleanClassId, cleanClassId]);
+      if (existingClass) {
+        cleanClassId = existingClass.id;
+      } else {
+        // Auto-create class/course when typed manually
+        await run('INSERT INTO classes (id, name, room, teacher_name) VALUES (?, ?, ?, ?)', [
+          cleanClassId,
+          cleanClassId,
+          'Main Campus',
+          fullName
+        ]);
+      }
+    }
+
     await run(`
       INSERT INTO users (username, password, role, full_name, assigned_class_id)
       VALUES (?, ?, 'teacher', ?, ?)
-    `, [username, password, fullName, assignedClassId || null]);
+    `, [username, password, fullName, cleanClassId || null]);
 
     // Also update class teacher_name if assigned
-    if (assignedClassId) {
-      await run('UPDATE classes SET teacher_name = ? WHERE id = ?', [fullName, assignedClassId]);
+    if (cleanClassId) {
+      await run('UPDATE classes SET teacher_name = ? WHERE id = ?', [fullName, cleanClassId]);
     }
 
     res.status(201).json({ success: true, message: 'Faculty account created successfully' });
@@ -196,8 +239,23 @@ app.put('/api/teachers/:id', async (req, res) => {
     const { id } = req.params;
     const { username, password, fullName, assignedClassId } = req.body;
 
+    let cleanClassId = assignedClassId ? assignedClassId.trim() : null;
+    if (cleanClassId) {
+      const existingClass = await get('SELECT id FROM classes WHERE id = ? OR LOWER(name) = LOWER(?)', [cleanClassId, cleanClassId]);
+      if (existingClass) {
+        cleanClassId = existingClass.id;
+      } else {
+        await run('INSERT INTO classes (id, name, room, teacher_name) VALUES (?, ?, ?, ?)', [
+          cleanClassId,
+          cleanClassId,
+          'Main Campus',
+          fullName
+        ]);
+      }
+    }
+
     let query = 'UPDATE users SET username = ?, full_name = ?, assigned_class_id = ?';
-    let params = [username, fullName, assignedClassId || null];
+    let params = [username, fullName, cleanClassId || null];
 
     if (password) {
       query += ', password = ?';
@@ -209,8 +267,8 @@ app.put('/api/teachers/:id', async (req, res) => {
 
     await run(query, params);
 
-    if (assignedClassId && fullName) {
-      await run('UPDATE classes SET teacher_name = ? WHERE id = ?', [fullName, assignedClassId]);
+    if (cleanClassId && fullName) {
+      await run('UPDATE classes SET teacher_name = ? WHERE id = ?', [fullName, cleanClassId]);
     }
 
     res.json({ success: true, message: 'Faculty account updated successfully' });
@@ -266,7 +324,21 @@ app.post('/api/students', async (req, res) => {
       return res.status(400).json({ error: 'Roll No, Name, and Class are required' });
     }
 
-    // Auto-generate ID: STU + random 4-digit or max ID
+    let cleanClassId = classId.trim();
+    const existingClass = await get('SELECT id FROM classes WHERE id = ? OR LOWER(name) = LOWER(?)', [cleanClassId, cleanClassId]);
+    if (existingClass) {
+      cleanClassId = existingClass.id;
+    } else {
+      // Auto-create class so manually typed classes work seamlessly!
+      await run('INSERT INTO classes (id, name, room, teacher_name) VALUES (?, ?, ?, ?)', [
+        cleanClassId,
+        cleanClassId,
+        'Main Campus',
+        ''
+      ]);
+    }
+
+    // Auto-generate ID: STU + random 4-digit
     const studentId = 'STU' + Math.floor(1000 + Math.random() * 9000);
 
     const qrToken = JSON.stringify({
@@ -274,13 +346,13 @@ app.post('/api/students', async (req, res) => {
       studentId: studentId,
       rollNo: Number(rollNo),
       name: name,
-      classId: classId
+      classId: cleanClassId
     });
 
     await run(`
       INSERT INTO students (id, roll_no, name, gender, class_id, parent_name, parent_phone, email, qr_token)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [studentId, rollNo, name, gender || 'Other', classId, parentName || '', parentPhone || '', email || '', qrToken]);
+    `, [studentId, rollNo, name, gender || 'Other', cleanClassId, parentName || '', parentPhone || '', email || '', qrToken]);
 
     res.status(201).json({ success: true, studentId, message: 'Student registered successfully' });
   } catch (error) {
@@ -293,19 +365,34 @@ app.put('/api/students/:id', async (req, res) => {
     const { id } = req.params;
     const { rollNo, name, gender, classId, parentName, parentPhone, email } = req.body;
 
+    let cleanClassId = classId ? classId.trim() : '';
+    if (cleanClassId) {
+      const existingClass = await get('SELECT id FROM classes WHERE id = ? OR LOWER(name) = LOWER(?)', [cleanClassId, cleanClassId]);
+      if (existingClass) {
+        cleanClassId = existingClass.id;
+      } else {
+        await run('INSERT INTO classes (id, name, room, teacher_name) VALUES (?, ?, ?, ?)', [
+          cleanClassId,
+          cleanClassId,
+          'Main Campus',
+          ''
+        ]);
+      }
+    }
+
     const qrToken = JSON.stringify({
       schema: 'SCHOOL_ATTENDANCE_V1',
       studentId: id,
       rollNo: Number(rollNo),
       name: name,
-      classId: classId
+      classId: cleanClassId
     });
 
     await run(`
       UPDATE students 
       SET roll_no = ?, name = ?, gender = ?, class_id = ?, parent_name = ?, parent_phone = ?, email = ?, qr_token = ?
       WHERE id = ?
-    `, [rollNo, name, gender, classId, parentName, parentPhone, email, qrToken, id]);
+    `, [rollNo, name, gender, cleanClassId, parentName, parentPhone, email, qrToken, id]);
 
     res.json({ success: true, message: 'Student updated successfully' });
   } catch (error) {
@@ -703,6 +790,14 @@ app.get('*', (req, res) => {
 </html>`);
 });
 
+const localIp = getLocalIpAddress();
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Attendance Server running on http://localhost:${PORT}`);
+  console.log(`
+==================================================================
+  EduTrack Campus Server v1.0 (${isCloudMode ? 'Cloud Mode' : 'Local Offline Mode'})
+  Database: ${isCloudMode ? 'Cloud PostgreSQL / Supabase' : 'Local SQLite (/server/attendance.db - NO INTERNET NEEDED)'}
+  Local Web: http://localhost:${PORT}
+  Mobile Wi-Fi IP for Phone: http://${localIp}:${PORT}
+==================================================================
+  `);
 });

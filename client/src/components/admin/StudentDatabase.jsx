@@ -65,7 +65,7 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
       rollNo: '',
       name: '',
       gender: 'Male',
-      classId: classes[0]?.id || '',
+      classId: '',
       parentName: '',
       parentPhone: '',
       email: ''
@@ -102,6 +102,7 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
 
       setIsAddModalOpen(false);
       setEditingStudent(null);
+      fetchClasses();
       fetchStudents();
     } catch (err) {
       alert(err.message || 'Failed to save student');
@@ -342,17 +343,21 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
-                    Class *
+                    Class / Department / Batch *
                   </label>
-                  <select
+                  <input
+                    type="text"
+                    list="student-class-suggestions"
                     value={formData.classId}
                     onChange={(e) => setFormData({ ...formData, classId: e.target.value })}
+                    placeholder="Type or select class (e.g. CSE-A, B.Sc Year 1)"
                     required
-                  >
+                  />
+                  <datalist id="student-class-suggestions">
                     {classes.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.id})</option>
+                      <option key={c.id} value={c.name || c.id}>{c.name} ({c.id})</option>
                     ))}
-                  </select>
+                  </datalist>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>

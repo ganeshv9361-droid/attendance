@@ -58,7 +58,7 @@ export default function FacultyManager({ onBack }) {
       username: '',
       password: '',
       fullName: '',
-      assignedClassId: classes[0]?.id || ''
+      assignedClassId: ''
     });
     setIsFacultyModalOpen(true);
   };
@@ -421,17 +421,23 @@ export default function FacultyManager({ onBack }) {
 
               <div style={{ marginBottom: '24px' }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
-                  Assigned Department / Batch
+                  Assigned Course / Subject / Class
                 </label>
-                <select
+                <input
+                  type="text"
+                  list="faculty-course-suggestions"
+                  placeholder="Type course name (e.g. Data Structures, Python, CSE-A)"
                   value={facultyForm.assignedClassId}
                   onChange={(e) => setFacultyForm({ ...facultyForm, assignedClassId: e.target.value })}
-                >
-                  <option value="">-- Select Department --</option>
+                />
+                <datalist id="faculty-course-suggestions">
                   {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.id})</option>
+                    <option key={c.id} value={c.name || c.id}>{c.name} ({c.id})</option>
                   ))}
-                </select>
+                </datalist>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  Manually type any course or subject name. It will be registered automatically.
+                </span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
