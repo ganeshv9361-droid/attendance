@@ -32,8 +32,9 @@ export default function Login({ onLoginSuccess }) {
   const testServerConnection = async () => {
     setPingStatus('testing');
     try {
-      const data = await apiFetch('/api/classes');
-      if (Array.isArray(data)) {
+      setApiBaseUrl(serverUrl);
+      const data = await apiFetch('/api/health');
+      if (data && data.status === 'ok') {
         setPingStatus('success');
       } else {
         setPingStatus('failed');
@@ -49,6 +50,13 @@ export default function Login({ onLoginSuccess }) {
     setError('');
     setIsLoading(true);
 
+    // If username is admin, automatically select admin role to prevent role mismatch errors
+    let effectiveRole = activeTab;
+    if (username.trim().toLowerCase() === 'admin') {
+      effectiveRole = 'admin';
+      if (activeTab !== 'admin') setActiveTab('admin');
+    }
+
     // Save server URL if altered
     setApiBaseUrl(serverUrl);
 
@@ -57,9 +65,9 @@ export default function Login({ onLoginSuccess }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username,
+          username: username.trim(),
           password,
-          role: activeTab
+          role: effectiveRole
         })
       });
 
@@ -135,13 +143,43 @@ export default function Login({ onLoginSuccess }) {
               <Settings size={16} style={{ color: 'var(--accent-primary)' }} />
               Backend Server Connection (Mobile APK)
             </span>
-            <button onClick={() => setShowServerConfig(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+            <button onClick={() => setShowServerConfig(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
               ✕
             </button>
           </div>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-            Enter your computer's local Wi-Fi IP address so the mobile app can reach the backend server:
+          <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+            Choose where your mobile APK connects:
           </p>
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => handleSaveServerUrl(DEFAULT_SERVER_URL)}
+              className="btn-secondary"
+              style={{
+                fontSize: '0.75rem',
+                padding: '5px 10px',
+                borderColor: serverUrl === DEFAULT_SERVER_URL ? 'var(--accent-primary)' : 'var(--border-color)',
+                backgroundColor: serverUrl === DEFAULT_SERVER_URL ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                fontWeight: serverUrl === DEFAULT_SERVER_URL ? 700 : 500
+              }}
+            >
+              ☁️ Render Cloud (Worldwide)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSaveServerUrl('http://10.138.117.168:5000')}
+              className="btn-secondary"
+              style={{
+                fontSize: '0.75rem',
+                padding: '5px 10px',
+                borderColor: serverUrl.includes('10.138') ? 'var(--accent-primary)' : 'var(--border-color)',
+                backgroundColor: serverUrl.includes('10.138') ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                fontWeight: serverUrl.includes('10.138') ? 700 : 500
+              }}
+            >
+              💻 Local PC (Wi-Fi)
+            </button>
+          </div>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
             <input
               type="text"
@@ -154,15 +192,15 @@ export default function Login({ onLoginSuccess }) {
               Test
             </button>
           </div>
-          {pingStatus === 'testing' && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Connecting to cloud server...</span>}
+          {pingStatus === 'testing' && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Connecting to server (Render may take ~20s to wake up)...</span>}
           {pingStatus === 'success' && (
             <span style={{ fontSize: '0.78rem', color: 'var(--present-color)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <CheckCircle2 size={14} /> Connected successfully to EduTrack Cloud!
+              <CheckCircle2 size={14} /> Connected successfully to EduTrack Server!
             </span>
           )}
           {pingStatus === 'failed' && (
             <span style={{ fontSize: '0.78rem', color: 'var(--absent-color)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <AlertCircle size={14} /> Connection failed. Check Internet or Cloud URL.
+              <AlertCircle size={14} /> Connection failed. Check Internet or click Render Cloud above.
             </span>
           )}
         </div>
@@ -215,6 +253,29 @@ export default function Login({ onLoginSuccess }) {
                 ? 'Manage college departments, faculty user IDs & master reports' 
                 : 'QR camera attendance & roll call for lectures and labs'}
             </p>
+          </div>
+
+          {/* Active Server Connection Pill */}
+          <div style={{
+            padding: '8px 16px',
+            backgroundColor: 'var(--bg-card-subtle)',
+            borderBottom: '1px solid var(--border-color)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            fontSize: '0.78rem'
+          }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e', display: 'inline-block' }}></span>
+              Server: <strong>{serverUrl.includes('onrender.com') ? 'EduTrack Cloud (Render)' : (serverUrl || 'Default Cloud')}</strong>
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowServerConfig(!showServerConfig)}
+              style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', fontWeight: 700, padding: 0, fontSize: '0.78rem' }}
+            >
+              Config
+            </button>
           </div>
 
           {/* Role Tabs */}

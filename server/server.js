@@ -1,14 +1,26 @@
 import express from 'express';
 import cors from 'cors';
 import QRCode from 'qrcode';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { run, get, all, initDatabase } from './database.js';
 import { generateDailyExcelWorkbook } from './excelExport.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicDir = path.resolve(__dirname, 'public');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// Serve static frontend assets if available
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+}
 
 // Initialize database schema and seeds
 initDatabase().catch(err => {
@@ -643,6 +655,52 @@ app.get('/api/attendance/export-excel', async (req, res) => {
     console.error('Excel export error:', error);
     res.status(500).json({ error: 'Failed to generate Excel attendance report' });
   }
+});
+
+// SPA fallback: Serve web application or informative API status page
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
+  }
+
+  const indexPath = path.resolve(publicDir, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EduTrack Campus Cloud API</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 36px; max-width: 520px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; border-radius: 9999px; font-size: 0.85rem; font-weight: 600; margin-bottom: 16px; }
+    .pulse { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 10px #22c55e; }
+    h1 { margin: 0 0 8px 0; font-size: 1.6rem; color: #ffffff; }
+    p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; margin: 0 0 20px 0; }
+    .info-box { background: #0f172a; border-radius: 10px; padding: 16px; font-family: monospace; font-size: 0.85rem; color: #cbd5e1; margin-bottom: 20px; }
+    .btn { display: inline-block; background: #3b82f6; color: white; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; transition: background 0.2s; }
+    .btn:hover { background: #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge"><div class="pulse"></div> Live & Healthy</div>
+    <h1>EduTrack Campus Cloud API</h1>
+    <p>The centralized attendance & student management cloud service is online and connected to Supabase PostgreSQL.</p>
+    <div class="info-box">
+      <div>✓ Database: Supabase PostgreSQL (Cloud)</div>
+      <div>✓ Service: edutrack-campus-api</div>
+      <div>✓ Uptime: ${Math.floor(process.uptime())}s</div>
+      <div>✓ Health Check: <a href="/api/health" style="color: #60a5fa;">/api/health</a></div>
+    </div>
+    <a href="/api/health" class="btn">View API Health Status</a>
+  </div>
+</body>
+</html>`);
 });
 
 app.listen(PORT, '0.0.0.0', () => {
