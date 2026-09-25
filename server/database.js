@@ -23,11 +23,14 @@ if (isCloudMode) {
     connectionString,
     ssl: {
       rejectUnauthorized: false
-    }
+    },
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000
   });
 
   pool.on('error', (err) => {
-    console.error('Unexpected error on idle PostgreSQL client:', err);
+    console.error('PostgreSQL client pool notice:', err.message);
   });
 } else {
   console.log('No DATABASE_URL supplied. Connecting to local SQLite database at', dbPath);
@@ -56,11 +59,36 @@ function formatPgSql(sql) {
   return formatted;
 }
 
+// Resilient query runner with automatic retry for PgBouncer idle disconnections
+async function safePgQuery(text, params, retries = 3) {
+  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    try {
+      const client = await pool.connect();
+      try {
+        return await client.query(text, params);
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      const isRetryable = 
+        err.code === 'ECONNRESET' || 
+        err.message.includes('terminated') || 
+        err.message.includes('disconnected') ||
+        err.message.includes('timeout');
+      if (attempt <= retries && isRetryable) {
+        await new Promise(r => setTimeout(r, 250));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 // Helper for run (INSERT, UPDATE, DELETE)
 export const run = async (sql, params = []) => {
   if (isCloudMode) {
     const pgSql = formatPgSql(sql);
-    const res = await pool.query(pgSql, params);
+    const res = await safePgQuery(pgSql, params);
     return { lastID: res.rows[0]?.id || null, changes: res.rowCount };
   } else {
     return new Promise((resolve, reject) => {
@@ -76,7 +104,7 @@ export const run = async (sql, params = []) => {
 export const get = async (sql, params = []) => {
   if (isCloudMode) {
     const pgSql = formatPgSql(sql);
-    const res = await pool.query(pgSql, params);
+    const res = await safePgQuery(pgSql, params);
     return res.rows[0] || null;
   } else {
     return new Promise((resolve, reject) => {
@@ -92,7 +120,7 @@ export const get = async (sql, params = []) => {
 export const all = async (sql, params = []) => {
   if (isCloudMode) {
     const pgSql = formatPgSql(sql);
-    const res = await pool.query(pgSql, params);
+    const res = await safePgQuery(pgSql, params);
     return res.rows;
   } else {
     return new Promise((resolve, reject) => {
@@ -109,7 +137,7 @@ export async function initDatabase() {
     console.log('Validating Supabase PostgreSQL connection & Master Administrator...');
     try {
       // 1. Ensure students table has year, branch, section, phone columns
-      await pool.query(`
+      await safePgQuery(`
         ALTER TABLE students ADD COLUMN IF NOT EXISTS year TEXT;
         ALTER TABLE students ADD COLUMN IF NOT EXISTS branch TEXT;
         ALTER TABLE students ADD COLUMN IF NOT EXISTS section TEXT;
@@ -117,7 +145,7 @@ export async function initDatabase() {
       `);
 
       // 2. Ensure default college departments exist if classes is empty
-      const classesCount = await pool.query('SELECT COUNT(*) FROM classes');
+      const classesCount = await safePgQuery('SELECT COUNT(*) FROM classes');
       if (parseInt(classesCount.rows[0].count) === 0) {
         console.log('Seeding standard college departments on Supabase...');
         const initialClasses = [
@@ -131,7 +159,7 @@ export async function initDatabase() {
           ['1-MECH-A', 'First Year MECH - Section A', 'Hall 108', 'Prof. James Watt']
         ];
         for (const [cid, cname, room, teacher] of initialClasses) {
-          await pool.query(
+          await safePgQuery(
             'INSERT INTO classes (id, name, room, teacher_name) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
             [cid, cname, room, teacher]
           );
@@ -139,9 +167,9 @@ export async function initDatabase() {
       }
 
       // 3. Ensure master admin
-      const res = await pool.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+      const res = await safePgQuery("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
       if (res.rows.length === 0) {
-        await pool.query(`
+        await safePgQuery(`
           INSERT INTO users (username, password, role, full_name, assigned_class_id)
           VALUES ('admin', 'admin123', 'admin', 'College Administrator / Dean', NULL)
           ON CONFLICT (username) DO NOTHING
