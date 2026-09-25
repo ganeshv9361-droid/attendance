@@ -12,7 +12,7 @@ export function getApiBaseUrl() {
     }
   }
 
-  // Detect if running in native mobile (Capacitor)
+  // Detect if running in native mobile (Capacitor) or standalone web
   const isCapacitor = typeof window !== 'undefined' && (
     window.Capacitor !== undefined || 
     window.location.protocol === 'capacitor:' || 
@@ -23,7 +23,12 @@ export function getApiBaseUrl() {
     return DEFAULT_SERVER_URL;
   }
 
-  // Web running with Vite proxy or same-origin
+  // If running in development Vite dev server
+  if (typeof window !== 'undefined' && window.location.port === '5173') {
+    return ''; // Vite proxy to backend
+  }
+
+  // Production Web running on Render or same-origin
   return '';
 }
 

@@ -319,12 +319,23 @@ app.get('/api/students', async (req, res) => {
 
 app.post('/api/students', async (req, res) => {
   try {
-    const { rollNo, name, gender, classId, parentName, parentPhone, email } = req.body;
-    if (!rollNo || !name || !classId) {
-      return res.status(400).json({ error: 'Roll No, Name, and Class are required' });
+    const { rollNo, name, gender, classId, parentName, parentPhone, email, year, branch, section, phone } = req.body;
+    if (!rollNo || !name) {
+      return res.status(400).json({ error: 'Roll No and Name are required' });
     }
 
-    let cleanClassId = classId.trim();
+    // Auto-derive class ID if not explicitly provided
+    let cleanClassId = classId ? classId.trim() : '';
+    if (!cleanClassId && year && branch) {
+      const cleanYear = year.replace(/[^0-9]/g, '') || year;
+      if (cleanYear === '1' || year.toLowerCase().includes('1st') || year.toLowerCase().includes('first')) {
+        cleanClassId = `1-${branch.toUpperCase()}-${(section || 'A').toUpperCase()}`;
+      } else {
+        cleanClassId = `${cleanYear}-${branch.toUpperCase()}`;
+      }
+    }
+    if (!cleanClassId) cleanClassId = 'General';
+
     const existingClass = await get('SELECT id FROM classes WHERE id = ? OR LOWER(name) = LOWER(?)', [cleanClassId, cleanClassId]);
     if (existingClass) {
       cleanClassId = existingClass.id;
@@ -342,17 +353,34 @@ app.post('/api/students', async (req, res) => {
     const studentId = 'STU' + Math.floor(1000 + Math.random() * 9000);
 
     const qrToken = JSON.stringify({
-      schema: 'SCHOOL_ATTENDANCE_V1',
+      schema: 'COLLEGE_ATTENDANCE_V1',
       studentId: studentId,
       rollNo: Number(rollNo),
       name: name,
+      year: year || '',
+      branch: branch || '',
+      section: section || '',
       classId: cleanClassId
     });
 
     await run(`
-      INSERT INTO students (id, roll_no, name, gender, class_id, parent_name, parent_phone, email, qr_token)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [studentId, rollNo, name, gender || 'Other', cleanClassId, parentName || '', parentPhone || '', email || '', qrToken]);
+      INSERT INTO students (id, roll_no, name, gender, class_id, parent_name, parent_phone, email, qr_token, year, branch, section, phone)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      studentId, 
+      rollNo, 
+      name, 
+      gender || 'Other', 
+      cleanClassId, 
+      parentName || '', 
+      parentPhone || phone || '', 
+      email || '', 
+      qrToken,
+      year || '',
+      branch || '',
+      section || '',
+      phone || parentPhone || ''
+    ]);
 
     res.status(201).json({ success: true, studentId, message: 'Student registered successfully' });
   } catch (error) {
@@ -363,36 +391,61 @@ app.post('/api/students', async (req, res) => {
 app.put('/api/students/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { rollNo, name, gender, classId, parentName, parentPhone, email } = req.body;
+    const { rollNo, name, gender, classId, parentName, parentPhone, email, year, branch, section, phone } = req.body;
 
     let cleanClassId = classId ? classId.trim() : '';
-    if (cleanClassId) {
-      const existingClass = await get('SELECT id FROM classes WHERE id = ? OR LOWER(name) = LOWER(?)', [cleanClassId, cleanClassId]);
-      if (existingClass) {
-        cleanClassId = existingClass.id;
+    if (!cleanClassId && year && branch) {
+      const cleanYear = year.replace(/[^0-9]/g, '') || year;
+      if (cleanYear === '1' || year.toLowerCase().includes('1st') || year.toLowerCase().includes('first')) {
+        cleanClassId = `1-${branch.toUpperCase()}-${(section || 'A').toUpperCase()}`;
       } else {
-        await run('INSERT INTO classes (id, name, room, teacher_name) VALUES (?, ?, ?, ?)', [
-          cleanClassId,
-          cleanClassId,
-          'Main Campus',
-          ''
-        ]);
+        cleanClassId = `${cleanYear}-${branch.toUpperCase()}`;
       }
+    }
+    if (!cleanClassId) cleanClassId = 'General';
+
+    const existingClass = await get('SELECT id FROM classes WHERE id = ? OR LOWER(name) = LOWER(?)', [cleanClassId, cleanClassId]);
+    if (existingClass) {
+      cleanClassId = existingClass.id;
+    } else {
+      await run('INSERT INTO classes (id, name, room, teacher_name) VALUES (?, ?, ?, ?)', [
+        cleanClassId,
+        cleanClassId,
+        'Main Campus',
+        ''
+      ]);
     }
 
     const qrToken = JSON.stringify({
-      schema: 'SCHOOL_ATTENDANCE_V1',
+      schema: 'COLLEGE_ATTENDANCE_V1',
       studentId: id,
       rollNo: Number(rollNo),
       name: name,
+      year: year || '',
+      branch: branch || '',
+      section: section || '',
       classId: cleanClassId
     });
 
     await run(`
       UPDATE students 
-      SET roll_no = ?, name = ?, gender = ?, class_id = ?, parent_name = ?, parent_phone = ?, email = ?, qr_token = ?
+      SET roll_no = ?, name = ?, gender = ?, class_id = ?, parent_name = ?, parent_phone = ?, email = ?, qr_token = ?, year = ?, branch = ?, section = ?, phone = ?
       WHERE id = ?
-    `, [rollNo, name, gender, cleanClassId, parentName, parentPhone, email, qrToken, id]);
+    `, [
+      rollNo, 
+      name, 
+      gender, 
+      cleanClassId, 
+      parentName || '', 
+      parentPhone || phone || '', 
+      email || '', 
+      qrToken, 
+      year || '', 
+      branch || '', 
+      section || '', 
+      phone || parentPhone || '', 
+      id
+    ]);
 
     res.json({ success: true, message: 'Student updated successfully' });
   } catch (error) {
@@ -497,7 +550,11 @@ app.get('/api/attendance', async (req, res) => {
     }
 
     const records = await all(sql, params);
-    res.json(records);
+    const formattedRecords = records.map(r => ({
+      ...r,
+      date: r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).split('T')[0]
+    }));
+    res.json(formattedRecords);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -730,11 +787,15 @@ app.get('/api/attendance/daily-summary', async (req, res) => {
   }
 });
 
-// ---------------- EXCEL EXPORT (ALL CLASSES) ----------------
+// ---------------- EXCEL EXPORT (CLASS SPECIFIC OR ALL CLASSES) ----------------
 app.get('/api/attendance/export-excel', async (req, res) => {
   try {
-    const { date = new Date().toISOString().split('T')[0] } = req.query;
-    const workbook = await generateDailyExcelWorkbook(date);
+    const { date = new Date().toISOString().split('T')[0], classId } = req.query;
+    const workbook = await generateDailyExcelWorkbook(date, classId || null);
+
+    const safeFilename = classId 
+      ? `Attendance_${date}_${classId.replace(/[^a-zA-Z0-9_-]/g, '_')}.xlsx`
+      : `Attendance_${date}_All_Classes.xlsx`;
 
     res.setHeader(
       'Content-Type',
@@ -742,7 +803,7 @@ app.get('/api/attendance/export-excel', async (req, res) => {
     );
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="Attendance_${date}_All_Classes.xlsx"`
+      `attachment; filename="${safeFilename}"`
     );
 
     await workbook.xlsx.write(res);

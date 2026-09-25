@@ -2,12 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   CheckCircle2, XCircle, QrCode, ClipboardList, Camera, CameraOff, 
   Phone, Users, Clock, AlertCircle, Sparkles, RefreshCw, Volume2, Calendar,
-  Plus, X, Check, Search, Upload, UserCheck, ChevronDown
+  Plus, X, Check, Search, Upload, UserCheck, ChevronDown, Download, FileSpreadsheet,
+  CheckCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Html5Qrcode } from 'html5-qrcode';
 import BackButton from '../common/BackButton';
-import { apiFetch } from '../../utils/api';
+import { apiFetch, getApiBaseUrl } from '../../utils/api';
+
+const BRANCH_OPTIONS = ['CSE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'IT', 'AI&DS'];
 
 export default function TeacherDashboard({ user, onBack, onLogout }) {
   const [classes, setClasses] = useState([]);
@@ -26,7 +29,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
   const [attendanceMap, setAttendanceMap] = useState({}); // { studentId: 'PRESENT' | 'ABSENT' }
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [autoDownloadNotice, setAutoDownloadNotice] = useState(false);
 
   // Scanner state
   const [isScanning, setIsScanning] = useState(false);
@@ -36,7 +39,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
   const fileInputRef = useRef(null);
   const lastScannedRef = useRef({ code: '', time: 0 });
 
-  // Student list tab on right panel: 'present' | 'absent' | 'all'
+  // Student directory tab on side panel: 'present' | 'absent' | 'all'
   const [listTab, setListTab] = useState('present');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -45,11 +48,13 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
   const [studentForm, setStudentForm] = useState({
     rollNo: '',
     name: '',
-    gender: 'Male',
+    year: '1st Year',
+    branch: 'CSE',
+    section: 'A',
+    email: '',
+    phone: '',
     classId: '',
-    parentName: '',
-    parentPhone: '',
-    email: ''
+    gender: 'Male'
   });
   const [addStudentError, setAddStudentError] = useState('');
 
@@ -86,7 +91,6 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     }
   }, [selectedClassId, date, session]);
 
-  // Clean up scanner when unmounting
   useEffect(() => {
     return () => {
       stopScanner();
@@ -111,11 +115,9 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     if (!selectedClassId) return;
     setLoading(true);
     try {
-      // 1. Fetch students of this class
       const stuData = await apiFetch(`/api/students?classId=${encodeURIComponent(selectedClassId)}`);
       setStudents(stuData);
 
-      // 2. Fetch existing attendance for this class, date, and session
       const attData = await apiFetch(`/api/attendance?classId=${encodeURIComponent(selectedClassId)}&date=${date}&session=${session}`);
 
       const map = {};
@@ -141,7 +143,6 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       [studentId]: newStatus
     }));
 
-    // Auto-save toggle to server
     try {
       await apiFetch('/api/attendance/mark', {
         method: 'POST',
@@ -166,10 +167,24 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     setAttendanceMap(updated);
   };
 
-  // Save manual attendance
+  // Trigger Excel Report Download
+  const handleDownloadExcel = (customClassId = selectedClassId) => {
+    const baseUrl = getApiBaseUrl();
+    const downloadUrl = `${baseUrl}/api/attendance/export-excel?date=${date}&classId=${encodeURIComponent(customClassId || '')}`;
+    
+    // Create hidden link and click
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.setAttribute('download', `Attendance_${date}_${customClassId || 'All'}.xlsx`);
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // Save manual attendance & automatically download Excel if afternoon session
   const handleSaveManualAttendance = async () => {
     setIsSaving(true);
-    setSaveSuccess(false);
     try {
       const records = students.map(s => ({
         studentId: s.id,
@@ -188,9 +203,18 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
         })
       });
 
-      setSaveSuccess(true);
       confetti({ particleCount: 50, spread: 60 });
-      setTimeout(() => setSaveSuccess(false), 3000);
+
+      // If afternoon attendance, automatically trigger Excel download as requested!
+      if (session === 'AFTERNOON') {
+        setAutoDownloadNotice(true);
+        setTimeout(() => {
+          handleDownloadExcel();
+        }, 600);
+        setTimeout(() => setAutoDownloadNotice(false), 8000);
+      } else {
+        alert('Morning Attendance saved successfully!');
+      }
     } catch (err) {
       console.error('Save failed:', err);
       alert(err.message || 'Failed to save attendance');
@@ -204,7 +228,6 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     setIsScanning(true);
     setScanFeedback(null);
 
-    // Stop prior scanner if any
     if (html5QrCodeRef.current) {
       try {
         await html5QrCodeRef.current.stop();
@@ -218,7 +241,6 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
         const scanner = new Html5Qrcode('qr-reader');
         html5QrCodeRef.current = scanner;
 
-        // Try getting cameras to select rear/environment camera
         const cameras = await Html5Qrcode.getCameras().catch(() => []);
         let cameraConfig = { facingMode: 'environment' };
 
@@ -235,15 +257,13 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
             aspectRatio: 1.0
           },
           onQrScanSuccess,
-          (errorMessage) => {
-            // Frame scan without QR, normal, ignore
-          }
+          (errorMessage) => {}
         );
       } catch (err) {
         console.error('Failed to start camera:', err);
         setScanFeedback({
           type: 'error',
-          text: 'Camera access denied or unavailable. Grant camera permission or use the "Scan Photo / File" button below.'
+          text: 'Camera access denied or unavailable. Grant camera permission in browser/device settings or use "Scan Photo / File" below.'
         });
         setIsScanning(false);
       }
@@ -277,7 +297,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       playBeep(350, 0.2);
       setScanFeedback({
         type: 'error',
-        text: 'Could not detect a valid QR code in the uploaded image. Please try again.'
+        text: 'Could not detect a valid QR code in the uploaded image. Please try another photo.'
       });
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -286,7 +306,6 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
 
   const onQrScanSuccess = async (decodedText) => {
     const now = Date.now();
-    // Debounce repeated scans within 2.5 seconds
     if (lastScannedRef.current.code === decodedText && (now - lastScannedRef.current.time) < 2500) {
       return;
     }
@@ -304,13 +323,11 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
         })
       });
 
-      // Update local state map
       setAttendanceMap(prev => ({
         ...prev,
         [data.student.id]: 'PRESENT'
       }));
 
-      // Add to recent scans list
       setRecentScans(prev => [
         { student: data.student, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), alreadyMarked: data.alreadyMarked },
         ...prev.slice(0, 4)
@@ -323,8 +340,8 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
           text: `${data.student.name} (#${data.student.rollNo}) was already marked PRESENT today!`
         });
       } else {
-        playBeep(1046, 0.15); // high chime
-        confetti({ particleCount: 35, spread: 55, origin: { y: 0.7 } });
+        playBeep(1046, 0.15);
+        confetti({ particleCount: 30, spread: 50, origin: { y: 0.7 } });
         setScanFeedback({
           type: 'success',
           text: `Verified! ${data.student.name} (#${data.student.rollNo}) marked PRESENT.`
@@ -332,24 +349,40 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       }
     } catch (err) {
       console.error('Error processing scan:', err);
-      playBeep(350, 0.2); // low error tone
+      playBeep(350, 0.2);
       setScanFeedback({
         type: 'error',
-        text: err.message || 'QR Scan error. Student might belong to another class.'
+        text: err.message || 'QR Scan error. Student may belong to another class.'
       });
     }
   };
 
   // Add Student Handler
   const handleOpenAddStudent = () => {
+    // Parse year/branch from selected class if possible
+    let yr = '1st Year';
+    let br = 'CSE';
+    let sec = 'A';
+    if (selectedClassId) {
+      const parts = selectedClassId.split('-');
+      if (parts[0] === '1') yr = '1st Year';
+      else if (parts[0] === '2') yr = '2nd Year';
+      else if (parts[0] === '3') yr = '3rd Year';
+      else if (parts[0] === '4') yr = '4th Year';
+      if (parts[1]) br = parts[1];
+      if (parts[2]) sec = parts[2];
+    }
+
     setStudentForm({
-      rollNo: students.length > 0 ? Math.max(...students.map(s => Number(s.roll_no) || 0)) + 1 : 1,
+      rollNo: students.length > 0 ? Math.max(...students.map(s => Number(s.roll_no) || 0)) + 1 : 101,
       name: '',
-      gender: 'Male',
+      year: yr,
+      branch: br,
+      section: yr === '1st Year' ? sec : '',
+      email: '',
+      phone: '',
       classId: selectedClassId,
-      parentName: '',
-      parentPhone: '',
-      email: ''
+      gender: 'Male'
     });
     setAddStudentError('');
     setIsAddStudentModalOpen(true);
@@ -362,7 +395,11 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       await apiFetch('/api/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(studentForm)
+        body: JSON.stringify({
+          ...studentForm,
+          classId: selectedClassId,
+          parentPhone: studentForm.phone
+        })
       });
 
       setIsAddStudentModalOpen(false);
@@ -370,7 +407,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       fetchStudentsAndAttendance();
       setScanFeedback({
         type: 'success',
-        text: `Student "${studentForm.name}" registered successfully to class ${studentForm.classId}!`
+        text: `Student "${studentForm.name}" registered successfully to ${selectedClassId}!`
       });
     } catch (err) {
       setAddStudentError(err.message || 'Failed to add student');
@@ -389,7 +426,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
         body: JSON.stringify({
           id: clean,
           name: clean,
-          room: 'Room TBD',
+          room: 'Main Campus',
           teacherName: user.fullName || ''
         })
       });
@@ -410,7 +447,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
   const absentCount = absentStudents.length;
   const attendanceRate = totalStudents > 0 ? ((presentCount / totalStudents) * 100).toFixed(1) : 0;
 
-  // Filtered lists for the right-hand panel
+  // Filtered lists for the directory panel
   const getFilteredList = () => {
     let list = [];
     if (listTab === 'present') list = presentStudents;
@@ -422,7 +459,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     return list.filter(s => 
       s.name.toLowerCase().includes(q) || 
       String(s.roll_no).includes(q) ||
-      (s.parent_name && s.parent_name.toLowerCase().includes(q))
+      (s.phone && s.phone.includes(q))
     );
   };
 
@@ -431,225 +468,257 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
   return (
     <div>
       {/* Top Header & Context Controls */}
-      <div className="card-header" style={{ marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
+      <div className="card-header" style={{ marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <h1 className="card-title" style={{ fontSize: '1.6rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 className="card-title" style={{ fontSize: '1.5rem' }}>
               <span>Faculty Attendance Station</span>
             </h1>
             <span className="user-role-badge badge-teacher">
-              {user.fullName || 'Faculty Member'}
+              {user.fullName || 'Faculty'}
             </span>
           </div>
           <p className="card-subtitle">
-            Roll call for <strong>{selectedClassId || 'Selected Class'}</strong> • QR Camera Check-in & Manual Records
+            Roll call & QR check-in for <strong>{selectedClassId || 'Selected Class'}</strong> • Stored as daily Excel report
           </p>
         </div>
 
-        {/* Top Control Bar: Class Selector, Add Student Button & Session */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Class Chooser */}
+        {/* Action Controls: Class Selector, Excel Download */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Class Chooser Dropdown */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Class:</span>
             <select
               value={selectedClassId}
-              onChange={(e) => {
-                stopScanner();
-                setSelectedClassId(e.target.value);
+              onChange={(e) => setSelectedClassId(e.target.value)}
+              style={{
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                padding: '8px 12px',
+                borderColor: 'var(--accent-primary)',
+                backgroundColor: 'var(--bg-card)'
               }}
-              style={{ fontWeight: 700, padding: '8px 12px', minWidth: '150px', borderRadius: 'var(--radius-sm)' }}
             >
-              {classes.length === 0 && <option value="">No classes found</option>}
               {classes.map(c => (
-                <option key={c.id} value={c.id}>{c.name || c.id}</option>
+                <option key={c.id} value={c.id}>
+                  {c.id} - {c.name}
+                </option>
               ))}
             </select>
             <button
-              type="button"
               onClick={() => setIsAddClassModalOpen(true)}
               className="btn-secondary"
-              style={{ padding: '8px 10px', fontSize: '0.78rem' }}
-              title="Create new class"
+              style={{ padding: '8px 10px', fontSize: '0.8rem' }}
+              title="Add New Department / Class"
             >
-              + Class
+              <Plus size={16} />
+              <span className="hide-mobile">Class</span>
             </button>
           </div>
 
-          {/* Add Student Button for Teachers */}
+          {/* Download Today's Excel Report */}
           <button
-            type="button"
-            onClick={handleOpenAddStudent}
-            className="btn-primary"
-            style={{ padding: '8px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+            onClick={() => handleDownloadExcel()}
+            className="btn-secondary"
+            style={{ padding: '8px 12px', fontSize: '0.82rem', borderColor: '#10b981', color: '#10b981' }}
+            title="Download Daily Attendance Excel Sheet"
           >
-            <Plus size={16} />
-            <span>Add Student</span>
+            <FileSpreadsheet size={16} />
+            <span>Download Excel</span>
           </button>
+        </div>
+      </div>
 
+      {/* Date & Session Selector Bar */}
+      <div className="card" style={{ padding: '12px 16px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           {/* Date Picker */}
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            style={{ width: 'auto', padding: '8px 12px' }}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Calendar size={18} style={{ color: 'var(--text-muted)' }} />
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Date:</span>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              style={{ padding: '6px 10px', fontSize: '0.85rem' }}
+            />
+          </div>
 
-          {/* Morning vs Afternoon Session Switcher */}
-          <div className="session-pill-container">
+          {/* Session Selector (Morning vs Afternoon) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', marginRight: '4px' }}>Session:</span>
             <button
+              type="button"
               onClick={() => setSession('MORNING')}
-              className={`session-btn ${session === 'MORNING' ? 'active' : ''}`}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                border: '1.5px solid',
+                borderColor: session === 'MORNING' ? 'var(--accent-primary)' : 'var(--border-color)',
+                backgroundColor: session === 'MORNING' ? 'var(--accent-light)' : 'transparent',
+                color: session === 'MORNING' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                cursor: 'pointer'
+              }}
             >
-              Morning (AM)
+              🌅 Morning Lecture
             </button>
             <button
+              type="button"
               onClick={() => setSession('AFTERNOON')}
-              className={`session-btn ${session === 'AFTERNOON' ? 'active' : ''}`}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                border: '1.5px solid',
+                borderColor: session === 'AFTERNOON' ? '#f59e0b' : 'var(--border-color)',
+                backgroundColor: session === 'AFTERNOON' ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
+                color: session === 'AFTERNOON' ? '#d97706' : 'var(--text-secondary)',
+                cursor: 'pointer'
+              }}
             >
-              Afternoon (PM)
+              🌆 Afternoon Lab
+            </button>
+          </div>
+
+          {/* Mode Switch: QR Scanner vs Manual Roll Call */}
+          <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-card-subtle)', padding: '4px', borderRadius: '8px' }}>
+            <button
+              onClick={() => setMode('qr')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '0.82rem',
+                fontWeight: mode === 'qr' ? 700 : 500,
+                border: 'none',
+                background: mode === 'qr' ? 'var(--bg-card)' : 'transparent',
+                color: mode === 'qr' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                boxShadow: mode === 'qr' ? 'var(--shadow-sm)' : 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <QrCode size={15} />
+              <span>QR Scanner</span>
+            </button>
+            <button
+              onClick={() => { setMode('manual'); stopScanner(); }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '0.82rem',
+                fontWeight: mode === 'manual' ? 700 : 500,
+                border: 'none',
+                background: mode === 'manual' ? 'var(--bg-card)' : 'transparent',
+                color: mode === 'manual' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                boxShadow: mode === 'manual' ? 'var(--shadow-sm)' : 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <ClipboardList size={15} />
+              <span>Manual Roll Call</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* 12:10 PM Rule Alert Bar */}
-      <div style={{
-        backgroundColor: 'var(--bg-card)',
-        border: '1px solid var(--border-color)',
-        borderRadius: 'var(--radius-md)',
-        padding: '12px 18px',
-        marginBottom: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '12px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Clock size={20} style={{ color: 'var(--accent-primary)' }} />
-          <span style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>
-            <strong>Active Session:</strong> {session === 'MORNING' ? 'Morning Roll Call' : 'Afternoon Roll Call'}
-            <span style={{ color: 'var(--text-muted)', marginLeft: '6px' }}>
-              (Automatic switch occurs at 12:10 PM daily)
-            </span>
-          </span>
-        </div>
-
-        {/* Mode Selector Tabs (QR vs Manual) */}
-        <div style={{ display: 'flex', gap: '6px' }}>
-          <button
-            onClick={() => {
-              if (mode === 'qr') stopScanner();
-              setMode('qr');
-            }}
-            className={mode === 'qr' ? 'btn-primary' : 'btn-secondary'}
-            style={{ padding: '7px 16px', fontSize: '0.85rem' }}
-          >
-            <Camera size={16} />
-            <span>QR Scanner Mode</span>
-          </button>
-          <button
-            onClick={() => {
-              stopScanner();
-              setMode('manual');
-            }}
-            className={mode === 'manual' ? 'btn-primary' : 'btn-secondary'}
-            style={{ padding: '7px 16px', fontSize: '0.85rem' }}
-          >
-            <ClipboardList size={16} />
-            <span>Manual Roster Mode</span>
-          </button>
-        </div>
-      </div>
-
-      {/* KPI Metrics Row */}
-      <div className="grid-4" style={{ marginBottom: '24px' }}>
-        <div className="card" onClick={() => setListTab('all')} style={{ cursor: 'pointer' }}>
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-            Class Enrolled
+      {/* Auto Download Banner Alert */}
+      {autoDownloadNotice && (
+        <div style={{
+          backgroundColor: 'rgba(16, 185, 129, 0.15)',
+          border: '1.5px solid #10b981',
+          color: '#065f46',
+          padding: '12px 18px',
+          borderRadius: 'var(--radius-md)',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          animation: 'fadeIn 0.3s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <CheckCircle2 size={22} style={{ color: '#10b981' }} />
+            <div>
+              <strong style={{ fontSize: '0.95rem' }}>Afternoon Attendance Recorded!</strong>
+              <div style={{ fontSize: '0.82rem' }}>Today's attendance Excel report has been saved to server and downloaded automatically. 📥</div>
+            </div>
           </div>
-          <div style={{ fontSize: '2rem', fontWeight: 800, marginTop: '4px' }}>
+          <button
+            onClick={() => handleDownloadExcel()}
+            className="btn-primary"
+            style={{ padding: '6px 14px', fontSize: '0.8rem', backgroundColor: '#10b981' }}
+          >
+            Download Again
+          </button>
+        </div>
+      )}
+
+      {/* 3 Key Metric Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '18px' }}>
+        <div className="card" style={{ padding: '14px', textAlign: 'center' }}>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
+            Total Enrolled
+          </div>
+          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>
             {totalStudents}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Class: {selectedClassId}</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+            Class {selectedClassId}
+          </div>
         </div>
 
-        <div className="card" onClick={() => setListTab('present')} style={{ borderBottom: '3px solid var(--present-color)', cursor: 'pointer' }}>
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--present-color)', textTransform: 'uppercase' }}>
-            Total Present
+        <div className="card" style={{ padding: '14px', textAlign: 'center', borderBottom: '3px solid #10b981' }}>
+          <div style={{ fontSize: '0.78rem', color: '#10b981', fontWeight: 700, textTransform: 'uppercase' }}>
+            🟢 Present
           </div>
-          <div style={{ fontSize: '2rem', fontWeight: 800, marginTop: '4px', color: 'var(--present-color)' }}>
+          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#10b981' }}>
             {presentCount}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            {attendanceRate}% of class present
+            {attendanceRate}% Present
           </div>
         </div>
 
-        <div className="card" onClick={() => setListTab('absent')} style={{ borderBottom: '3px solid var(--absent-color)', cursor: 'pointer' }}>
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--absent-color)', textTransform: 'uppercase' }}>
-            Total Absent
+        <div className="card" style={{ padding: '14px', textAlign: 'center', borderBottom: '3px solid #ef4444' }}>
+          <div style={{ fontSize: '0.78rem', color: '#ef4444', fontWeight: 700, textTransform: 'uppercase' }}>
+            🔴 Absent
           </div>
-          <div style={{ fontSize: '2rem', fontWeight: 800, marginTop: '4px', color: 'var(--absent-color)' }}>
+          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#ef4444' }}>
             {absentCount}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            Click to view absentees
-          </div>
-        </div>
-
-        <div className="card">
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-            Date & Session
-          </div>
-          <div style={{ fontSize: '1.25rem', fontWeight: 800, marginTop: '8px' }}>
-            {session}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {date}
+            {totalStudents > 0 ? (100 - attendanceRate).toFixed(1) : 0}% Absent
           </div>
         </div>
       </div>
 
-      {/* MAIN ATTENDANCE INTERACTION AREA */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr', gap: '24px' }}>
-        {/* Left Column: QR Scanner or Manual List */}
+      {/* Main Two-Column Layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: '16px', alignItems: 'start' }}>
+        {/* LEFT COLUMN: QR Scanner OR Manual Checklist */}
         <div>
           {mode === 'qr' ? (
-            <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-                <h2 className="card-title">
-                  <Camera size={22} style={{ color: 'var(--accent-primary)' }} />
-                  <span>Live Camera QR Check-in</span>
-                </h2>
+            /* QR CAMERA SCANNER MODE */
+            <div className="card" style={{ padding: '18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <span style={{ fontWeight: 800, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Camera size={20} style={{ color: 'var(--accent-primary)' }} />
+                  Live QR Camera Scanner
+                </span>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {/* Image/File scan fallback */}
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*"
-                    capture="environment"
-                    style={{ display: 'none' }}
-                    onChange={handleFileScan}
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="btn-secondary"
-                    style={{ padding: '8px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    title="Upload QR photo or scan from gallery"
-                  >
-                    <Upload size={15} />
-                    <span>Scan Photo</span>
-                  </button>
-
+                <div style={{ display: 'flex', gap: '6px' }}>
                   {!isScanning ? (
-                    <button onClick={startScanner} className="btn-primary" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button onClick={startScanner} className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
                       <Camera size={16} />
-                      <span>Open Camera Scanner</span>
+                      <span>Start Camera</span>
                     </button>
                   ) : (
-                    <button onClick={stopScanner} className="btn-secondary" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button onClick={stopScanner} className="btn-outline-danger" style={{ padding: '8px 14px', fontSize: '0.85rem' }}>
                       <CameraOff size={16} />
                       <span>Stop Camera</span>
                     </button>
@@ -657,362 +726,470 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                 </div>
               </div>
 
-              {/* Camera Scanner Viewport */}
+              {/* Viewfinder Window */}
               <div style={{
                 position: 'relative',
-                minHeight: '300px',
-                backgroundColor: '#000000',
+                width: '100%',
+                minHeight: '280px',
+                backgroundColor: '#0f172a',
                 borderRadius: 'var(--radius-md)',
                 overflow: 'hidden',
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginBottom: '16px'
+                border: isScanning ? '2.5px solid #22c55e' : '2px dashed var(--border-color)',
+                marginBottom: '14px'
               }}>
-                <div id="qr-reader" style={{ width: '100%', maxWidth: '380px' }}></div>
+                <div id="qr-reader" style={{ width: '100%', height: '100%' }}></div>
 
                 {!isScanning && (
-                  <div style={{ textAlign: 'center', color: '#94a3b8', padding: '30px 16px' }}>
-                    <QrCode size={52} style={{ margin: '0 auto 12px', opacity: 0.7 }} />
-                    <h3 style={{ fontSize: '1.1rem', color: '#ffffff', marginBottom: '4px' }}>Camera is on Standby</h3>
-                    <p style={{ fontSize: '0.85rem', marginBottom: '14px' }}>Click "Open Camera Scanner" to scan student QR codes.</p>
-                    <button onClick={startScanner} className="btn-primary" style={{ margin: '0 auto', padding: '8px 20px' }}>
-                      Start Camera
+                  <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
+                    <QrCode size={54} style={{ margin: '0 auto 12px', opacity: 0.6 }} />
+                    <div style={{ fontWeight: 700, fontSize: '1rem', color: '#f8fafc', marginBottom: '6px' }}>
+                      Camera is Paused
+                    </div>
+                    <p style={{ fontSize: '0.82rem', maxWidth: '300px', margin: '0 auto 14px', color: '#cbd5e1' }}>
+                      Tap "Start Camera" to scan student QR cards, or upload an image file from device.
+                    </p>
+                    <button onClick={startScanner} className="btn-primary" style={{ padding: '9px 18px', fontSize: '0.85rem' }}>
+                      <Camera size={16} />
+                      <span>Turn On Scanner</span>
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* Scanner Feedback Banner */}
+              {/* Photo Upload Fallback */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                  Having camera trouble? Upload QR picture:
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRef}
+                  onChange={handleFileScan}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn-secondary"
+                  style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                >
+                  <Upload size={14} />
+                  <span>Scan Photo / File</span>
+                </button>
+              </div>
+
+              {/* Instant Scan Feedback Alert */}
               {scanFeedback && (
                 <div style={{
-                  padding: '12px 18px',
-                  borderRadius: 'var(--radius-md)',
-                  marginBottom: '16px',
+                  padding: '12px 16px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.88rem',
                   fontWeight: 600,
-                  fontSize: '0.92rem',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '10px',
-                  backgroundColor: scanFeedback.type === 'success' ? 'var(--present-bg)' : scanFeedback.type === 'warning' ? 'var(--warning-bg)' : 'var(--absent-bg)',
-                  color: scanFeedback.type === 'success' ? 'var(--present-color)' : scanFeedback.type === 'warning' ? 'var(--warning-color)' : 'var(--absent-color)',
-                  border: `1px solid ${scanFeedback.type === 'success' ? 'var(--present-border)' : 'var(--absent-border)'}`
+                  marginBottom: '14px',
+                  backgroundColor: scanFeedback.type === 'success' ? 'var(--present-bg)' : (scanFeedback.type === 'warning' ? '#fef3c7' : 'var(--absent-bg)'),
+                  color: scanFeedback.type === 'success' ? 'var(--present-color)' : (scanFeedback.type === 'warning' ? '#92400e' : 'var(--absent-color)'),
+                  border: `1px solid ${scanFeedback.type === 'success' ? 'var(--present-border)' : (scanFeedback.type === 'warning' ? '#fde68a' : 'var(--absent-border)')}`
                 }}>
-                  {scanFeedback.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+                  {scanFeedback.type === 'success' && <CheckCircle2 size={20} />}
+                  {scanFeedback.type === 'warning' && <AlertCircle size={20} />}
+                  {scanFeedback.type === 'error' && <XCircle size={20} />}
                   <span>{scanFeedback.text}</span>
                 </div>
               )}
 
-              {/* Recent Scans Stream */}
+              {/* Afternoon Finalize & Download Button */}
+              {session === 'AFTERNOON' && (
+                <div style={{
+                  padding: '12px 16px',
+                  backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '14px'
+                }}>
+                  <div>
+                    <strong style={{ fontSize: '0.85rem', color: '#b45309' }}>Finished Afternoon Attendance?</strong>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Download the completed daily attendance Excel workbook.</div>
+                  </div>
+                  <button
+                    onClick={() => handleDownloadExcel()}
+                    className="btn-primary"
+                    style={{ backgroundColor: '#f59e0b', padding: '8px 14px', fontSize: '0.82rem' }}
+                  >
+                    <Download size={15} />
+                    <span>Download Excel</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Recent Scan History Stream */}
               {recentScans.length > 0 && (
-                <div style={{ marginBottom: '14px' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase' }}>
-                    Live Recent Check-ins:
+                <div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>
+                    Recent Check-ins
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {recentScans.map((r, i) => (
-                      <div key={i} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '6px 12px',
-                        backgroundColor: 'var(--bg-card-subtle)',
-                        borderRadius: 'var(--radius-sm)',
-                        borderLeft: '3px solid var(--present-color)',
-                        fontSize: '0.84rem'
-                      }}>
+                    {recentScans.map((scan, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          backgroundColor: 'var(--bg-card-subtle)',
+                          borderRadius: 'var(--radius-sm)',
+                          fontSize: '0.82rem'
+                        }}
+                      >
                         <span style={{ fontWeight: 600 }}>
-                          #{r.student.rollNo} • {r.student.name}
+                          #{scan.student.rollNo} {scan.student.name}
                         </span>
-                        <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                          {r.time} • 🟢 PRESENT
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                          {scan.time}
                         </span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-
-              {/* Instructions */}
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
-                Tip: Hold the student's QR code in front of the camera. The student will be verified and marked Present automatically.
-              </p>
             </div>
           ) : (
-            /* MANUAL ROSTER MODE */
-            <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
-                <h2 className="card-title">
-                  <ClipboardList size={22} style={{ color: 'var(--accent-primary)' }} />
-                  <span>Manual Attendance Roll Call</span>
-                </h2>
+            /* MANUAL ROLL CALL / CHECKLIST MODE */
+            <div className="card" style={{ padding: '18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>
+                    Manual Roll Call: {selectedClassId}
+                  </h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0 }}>
+                    Tap Present / Absent for each student, then save attendance below.
+                  </p>
+                </div>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={() => markAll('PRESENT')} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => markAll('PRESENT')}
+                    className="btn-secondary"
+                    style={{ padding: '5px 10px', fontSize: '0.78rem', color: '#10b981' }}
+                  >
                     All Present
                   </button>
-                  <button onClick={() => markAll('ABSENT')} className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
-                    All Absent
-                  </button>
                   <button
-                    onClick={handleSaveManualAttendance}
-                    disabled={isSaving}
-                    className="btn-success"
-                    style={{ padding: '6px 14px', fontSize: '0.85rem' }}
+                    type="button"
+                    onClick={() => markAll('ABSENT')}
+                    className="btn-secondary"
+                    style={{ padding: '5px 10px', fontSize: '0.78rem', color: '#ef4444' }}
                   >
-                    {isSaving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save Attendance'}
+                    All Absent
                   </button>
                 </div>
               </div>
 
-              {/* Roster Table */}
-              <div className="table-container" style={{ maxHeight: '480px', overflowY: 'auto' }}>
-                <table>
-                  <thead>
+              {/* Student Checklist Table */}
+              <div style={{ maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', marginBottom: '16px' }}>
+                <table style={{ margin: 0 }}>
+                  <thead style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: 'var(--bg-card-subtle)' }}>
                     <tr>
-                      <th>Roll</th>
+                      <th style={{ width: '60px' }}>Roll</th>
                       <th>Student Name</th>
-                      <th>Gender</th>
-                      <th style={{ textAlign: 'center' }}>Status</th>
-                      <th style={{ textAlign: 'right' }}>Toggle</th>
+                      <th>Year/Branch</th>
+                      <th style={{ textAlign: 'right' }}>Status Toggle</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {students.map(s => {
-                      const isPresent = attendanceMap[s.id] === 'PRESENT';
-                      return (
-                        <tr key={s.id} onClick={() => toggleStudent(s.id)} style={{ cursor: 'pointer' }}>
-                          <td style={{ fontWeight: 700 }}>#{s.roll_no}</td>
-                          <td style={{ fontWeight: 600 }}>{s.name}</td>
-                          <td>{s.gender}</td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span className={`status-badge ${isPresent ? 'status-present' : 'status-absent'}`}>
-                              {isPresent ? 'PRESENT' : 'ABSENT'}
-                            </span>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleStudent(s.id);
-                              }}
-                              className={isPresent ? 'btn-outline-danger' : 'btn-success'}
-                              style={{ padding: '6px 12px', fontSize: '0.78rem' }}
-                            >
-                              {isPresent ? 'Mark Absent' : 'Mark Present'}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {students.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                          No students enrolled in this class yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      students.map(s => {
+                        const isPresent = attendanceMap[s.id] === 'PRESENT';
+                        return (
+                          <tr key={s.id}>
+                            <td style={{ fontWeight: 800, color: 'var(--accent-primary)' }}>#{s.roll_no}</td>
+                            <td style={{ fontWeight: 600 }}>{s.name}</td>
+                            <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                              {s.year || ''} {s.branch || ''} {s.section ? `(${s.section})` : ''}
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button
+                                type="button"
+                                onClick={() => toggleStudent(s.id)}
+                                style={{
+                                  padding: '5px 12px',
+                                  borderRadius: '9999px',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 700,
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  backgroundColor: isPresent ? 'var(--present-color)' : 'var(--absent-color)',
+                                  color: '#ffffff',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                {isPresent ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                                <span>{isPresent ? 'PRESENT' : 'ABSENT'}</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
+
+              {/* Big Save Button */}
+              <button
+                type="button"
+                onClick={handleSaveManualAttendance}
+                disabled={isSaving || students.length === 0}
+                className="btn-primary"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  fontSize: '0.95rem',
+                  backgroundColor: session === 'AFTERNOON' ? '#d97706' : 'var(--accent-primary)'
+                }}
+              >
+                {isSaving ? 'Saving...' : (
+                  session === 'AFTERNOON' ? (
+                    <>
+                      <Download size={18} />
+                      <span>Save & Download Afternoon Excel 📥</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={18} />
+                      <span>Save Morning Attendance</span>
+                    </>
+                  )
+                )}
+              </button>
             </div>
           )}
         </div>
 
-        {/* Right Column: STUDENT NAMELIST PANEL (Present / Absent / All) */}
+        {/* RIGHT COLUMN: Roster Tabs (Present List, Absent List, All) & Add Student */}
         <div>
-          <div className="card" style={{ borderTop: `4px solid ${listTab === 'present' ? 'var(--present-color)' : listTab === 'absent' ? 'var(--absent-color)' : 'var(--accent-primary)'}` }}>
-            {/* Tab Header Controls */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
-              <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-card-subtle)', padding: '3px', borderRadius: 'var(--radius-md)' }}>
-                <button
-                  type="button"
-                  onClick={() => setListTab('present')}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    borderRadius: 'var(--radius-sm)',
-                    background: listTab === 'present' ? 'var(--present-color)' : 'transparent',
-                    color: listTab === 'present' ? '#ffffff' : 'var(--text-secondary)',
-                    border: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  🟢 Present ({presentCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setListTab('absent')}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    borderRadius: 'var(--radius-sm)',
-                    background: listTab === 'absent' ? 'var(--absent-color)' : 'transparent',
-                    color: listTab === 'absent' ? '#ffffff' : 'var(--text-secondary)',
-                    border: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  🔴 Absent ({absentCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setListTab('all')}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    borderRadius: 'var(--radius-sm)',
-                    background: listTab === 'all' ? 'var(--accent-primary)' : 'transparent',
-                    color: listTab === 'all' ? '#ffffff' : 'var(--text-secondary)',
-                    border: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  👥 All ({totalStudents})
-                </button>
-              </div>
+          <div className="card" style={{ padding: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <span style={{ fontWeight: 800, fontSize: '0.95rem' }}>
+                Class Roster & Name List
+              </span>
 
+              {/* "+ Add Student" Button directly from Teacher Station */}
               <button
                 type="button"
                 onClick={handleOpenAddStudent}
-                className="btn-secondary"
-                style={{ padding: '6px 10px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                title="Add student to this class"
+                className="btn-primary"
+                style={{ padding: '6px 12px', fontSize: '0.78rem' }}
               >
-                <Plus size={14} />
-                <span>Add</span>
+                <Plus size={15} />
+                <span>Add Student</span>
               </button>
             </div>
 
-            {/* Quick Search in List */}
-            <div style={{ position: 'relative', marginBottom: '14px' }}>
-              <input
-                type="text"
-                placeholder={`Search ${listTab} students by name or roll...`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ paddingLeft: '34px', fontSize: '0.84rem', padding: '7px 10px 7px 34px' }}
-              />
-              <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            {/* Present / Absent / All Tabs */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', marginBottom: '12px', backgroundColor: 'var(--bg-card-subtle)', padding: '3px', borderRadius: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setListTab('present')}
+                style={{
+                  padding: '6px',
+                  borderRadius: '6px',
+                  fontSize: '0.78rem',
+                  fontWeight: listTab === 'present' ? 700 : 500,
+                  border: 'none',
+                  background: listTab === 'present' ? '#10b981' : 'transparent',
+                  color: listTab === 'present' ? '#ffffff' : 'var(--text-secondary)',
+                  cursor: 'pointer'
+                }}
+              >
+                Present ({presentCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setListTab('absent')}
+                style={{
+                  padding: '6px',
+                  borderRadius: '6px',
+                  fontSize: '0.78rem',
+                  fontWeight: listTab === 'absent' ? 700 : 500,
+                  border: 'none',
+                  background: listTab === 'absent' ? '#ef4444' : 'transparent',
+                  color: listTab === 'absent' ? '#ffffff' : 'var(--text-secondary)',
+                  cursor: 'pointer'
+                }}
+              >
+                Absent ({absentCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setListTab('all')}
+                style={{
+                  padding: '6px',
+                  borderRadius: '6px',
+                  fontSize: '0.78rem',
+                  fontWeight: listTab === 'all' ? 700 : 500,
+                  border: 'none',
+                  background: listTab === 'all' ? 'var(--bg-card)' : 'transparent',
+                  color: listTab === 'all' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer'
+                }}
+              >
+                All ({totalStudents})
+              </button>
             </div>
 
-            {/* Empty State */}
-            {displayedStudents.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)' }}>
-                {listTab === 'present' ? (
-                  <>
-                    <QrCode size={36} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
-                    <div style={{ fontWeight: 700 }}>No Students Marked Present Yet</div>
-                    <div style={{ fontSize: '0.78rem' }}>Scan QR cards or use Manual Roster to mark attendance.</div>
-                  </>
-                ) : listTab === 'absent' ? (
-                  <>
-                    <CheckCircle2 size={36} style={{ margin: '0 auto 8px', color: 'var(--present-color)' }} />
-                    <div style={{ fontWeight: 700, color: 'var(--present-color)' }}>All Students Present!</div>
-                    <div style={{ fontSize: '0.78rem' }}>100% attendance recorded for this session.</div>
-                  </>
-                ) : (
-                  <>
-                    <Users size={36} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
-                    <div style={{ fontWeight: 700 }}>No Students Enrolled in {selectedClassId}</div>
-                    <button onClick={handleOpenAddStudent} className="btn-primary" style={{ marginTop: '10px', padding: '6px 14px', fontSize: '0.8rem' }}>
-                      + Add First Student
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : (
-              /* Students Name List */
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '460px', overflowY: 'auto' }}>
-                {displayedStudents.map(s => {
+            {/* Search Input */}
+            <div style={{ position: 'relative', marginBottom: '12px' }}>
+              <input
+                type="text"
+                placeholder="Search name, roll no..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ paddingLeft: '32px', fontSize: '0.8rem', width: '100%', padding: '6px 8px 6px 32px' }}
+              />
+              <Search size={15} style={{
+                position: 'absolute',
+                left: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--text-muted)'
+              }} />
+            </div>
+
+            {/* Name List Content */}
+            <div style={{ maxHeight: '380px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {displayedStudents.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                  {listTab === 'present' && 'No students present yet today.'}
+                  {listTab === 'absent' && 'All students are present! (100% Attendance)'}
+                  {listTab === 'all' && 'No students found.'}
+                </div>
+              ) : (
+                displayedStudents.map(s => {
                   const isPresent = attendanceMap[s.id] === 'PRESENT';
                   return (
                     <div
                       key={s.id}
                       style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
                         padding: '10px 12px',
                         backgroundColor: 'var(--bg-card-subtle)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: 'var(--radius-md)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '8px'
+                        borderRadius: 'var(--radius-sm)',
+                        borderLeft: `4px solid ${isPresent ? '#10b981' : '#ef4444'}`
                       }}
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{
-                            fontSize: '0.75rem',
-                            fontWeight: 800,
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            backgroundColor: isPresent ? 'var(--present-bg)' : 'var(--absent-bg)',
-                            color: isPresent ? 'var(--present-color)' : 'var(--absent-color)'
-                          }}>
-                            #{s.roll_no}
-                          </span>
-                          <span style={{ fontWeight: 700, fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {s.name}
-                          </span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+                          #{s.roll_no} {s.name}
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                          Parent: {s.parent_name || 'N/A'} {s.parent_phone && `• ${s.parent_phone}`}
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          {s.year || ''} {s.branch || ''} {s.section ? `• Sec ${s.section}` : ''}
                         </div>
                       </div>
 
-                      {/* Action buttons */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {s.parent_phone && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {/* Parent/Contact Phone call option for absentees */}
+                        {!isPresent && (s.phone || s.parent_phone) && (
                           <a
-                            href={`tel:${s.parent_phone}`}
-                            className="btn-secondary"
-                            style={{ padding: '5px 8px', fontSize: '0.72rem', textDecoration: 'none' }}
-                            title={`Call parent: ${s.parent_phone}`}
+                            href={`tel:${s.phone || s.parent_phone}`}
+                            style={{
+                              padding: '5px',
+                              borderRadius: '50%',
+                              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                              color: '#ef4444',
+                              display: 'inline-flex'
+                            }}
+                            title={`Call parent / student: ${s.phone || s.parent_phone}`}
                           >
-                            <Phone size={13} style={{ color: 'var(--accent-primary)' }} />
+                            <Phone size={14} />
                           </a>
                         )}
 
                         <button
                           type="button"
                           onClick={() => toggleStudent(s.id)}
-                          className={isPresent ? 'btn-outline-danger' : 'btn-success'}
-                          style={{ padding: '5px 9px', fontSize: '0.74rem', whiteSpace: 'nowrap' }}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: isPresent ? '#10b981' : '#ef4444',
+                            color: '#ffffff'
+                          }}
                         >
-                          {isPresent ? 'Undo' : 'Mark'}
+                          {isPresent ? 'PRESENT' : 'ABSENT'}
                         </button>
                       </div>
                     </div>
                   );
-                })}
-              </div>
-            )}
+                })
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ADD STUDENT MODAL FOR TEACHERS */}
+      {/* ADD STUDENT MODAL */}
       {isAddStudentModalOpen && (
         <div className="modal-backdrop">
-          <div className="modal-content" style={{ maxWidth: '480px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Users size={20} style={{ color: 'var(--accent-primary)' }} />
-                <span>Add Student to Class</span>
-              </h2>
-              <button onClick={() => setIsAddStudentModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
+                  Enroll Student to {selectedClassId}
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  Add student with Name, Year, Branch, Section (1st Year), Phone & Email.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsAddStudentModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
                 <X size={20} />
               </button>
             </div>
 
             {addStudentError && (
-              <div style={{ padding: '8px 12px', backgroundColor: 'var(--absent-bg)', color: 'var(--absent-color)', borderRadius: 'var(--radius-sm)', marginBottom: '14px', fontSize: '0.82rem' }}>
+              <div style={{
+                backgroundColor: 'var(--absent-bg)',
+                color: 'var(--absent-color)',
+                padding: '10px 14px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.82rem',
+                marginBottom: '14px'
+              }}>
                 {addStudentError}
               </div>
             )}
 
             <form onSubmit={handleSaveStudent}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '12px', marginBottom: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '4px' }}>
                     Roll No *
                   </label>
                   <input
@@ -1023,75 +1200,112 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
-                    Student Full Name *
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '4px' }}>
+                    Full Name *
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Ramesh Kumar"
                     value={studentForm.name}
                     onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
+                    placeholder="e.g. Michael Scott"
                     required
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+              {/* Year, Branch, Section */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: studentForm.year === '1st Year' ? '1fr 1fr 1fr' : '1fr 1fr',
+                gap: '10px',
+                marginBottom: '12px',
+                backgroundColor: 'var(--bg-card-subtle)',
+                padding: '10px',
+                borderRadius: '6px'
+              }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
-                    Class / Course *
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '4px' }}>
+                    Year *
+                  </label>
+                  <select
+                    value={studentForm.year}
+                    onChange={(e) => {
+                      const yr = e.target.value;
+                      setStudentForm({
+                        ...studentForm,
+                        year: yr,
+                        section: yr === '1st Year' ? 'A' : ''
+                      });
+                    }}
+                    style={{ width: '100%' }}
+                  >
+                    <option value="1st Year">1st Year</option>
+                    <option value="2nd Year">2nd Year</option>
+                    <option value="3rd Year">3rd Year</option>
+                    <option value="4th Year">4th Year</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '4px' }}>
+                    Branch *
                   </label>
                   <input
                     type="text"
-                    list="teacher-class-options"
-                    value={studentForm.classId}
-                    onChange={(e) => setStudentForm({ ...studentForm, classId: e.target.value })}
-                    placeholder="e.g. CSE-A"
+                    value={studentForm.branch}
+                    onChange={(e) => setStudentForm({ ...studentForm, branch: e.target.value.toUpperCase() })}
+                    placeholder="CSE"
+                    required
+                    style={{ width: '100%', textTransform: 'uppercase' }}
+                  />
+                </div>
+
+                {studentForm.year === '1st Year' && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '4px', color: 'var(--accent-primary)' }}>
+                      Section * (1st Yr)
+                    </label>
+                    <select
+                      value={studentForm.section}
+                      onChange={(e) => setStudentForm({ ...studentForm, section: e.target.value })}
+                      style={{ width: '100%', borderColor: 'var(--accent-primary)', fontWeight: 700 }}
+                      required
+                    >
+                      <option value="A">Section A</option>
+                      <option value="B">Section B</option>
+                      <option value="C">Section C</option>
+                      <option value="D">Section D</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Phone & Common Mail ID */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '4px' }}>
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    value={studentForm.phone}
+                    onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })}
+                    placeholder="9876543210"
                     required
                   />
-                  <datalist id="teacher-class-options">
-                    {classes.map(c => (
-                      <option key={c.id} value={c.name || c.id}>{c.name} ({c.id})</option>
-                    ))}
-                  </datalist>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
-                    Gender
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '4px' }}>
+                    Common Mail ID *
                   </label>
-                  <select
-                    value={studentForm.gender}
-                    onChange={(e) => setStudentForm({ ...studentForm, gender: e.target.value })}
-                  >
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
+                  <input
+                    type="email"
+                    value={studentForm.email}
+                    onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })}
+                    placeholder="student@college.edu"
+                    required
+                  />
                 </div>
-              </div>
-
-              <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
-                  Parent / Guardian Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Suresh Kumar"
-                  value={studentForm.parentName}
-                  onChange={(e) => setStudentForm({ ...studentForm, parentName: e.target.value })}
-                />
-              </div>
-
-              <div style={{ marginBottom: '22px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
-                  Parent Phone Number
-                </label>
-                <input
-                  type="tel"
-                  placeholder="+91 98765 43210"
-                  value={studentForm.parentPhone}
-                  onChange={(e) => setStudentForm({ ...studentForm, parentPhone: e.target.value })}
-                />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
@@ -1102,9 +1316,9 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
-                  <Check size={16} />
-                  <span>Save Student</span>
+                <button type="submit" className="btn-primary" style={{ padding: '8px 18px' }}>
+                  <Plus size={16} />
+                  <span>Register & Generate QR</span>
                 </button>
               </div>
             </form>
@@ -1112,33 +1326,30 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
         </div>
       )}
 
-      {/* CREATE NEW CLASS MODAL */}
+      {/* ADD CLASS MODAL */}
       {isAddClassModalOpen && (
         <div className="modal-backdrop">
           <div className="modal-content" style={{ maxWidth: '420px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-                Create / Type New Class
-              </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0 }}>Add New Class / Department</h3>
               <button onClick={() => setIsAddClassModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
-
             <form onSubmit={handleCreateNewClass}>
-              <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
-                  Class / Course Name *
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '6px' }}>
+                  Class Code / Department Name
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. CSE-B or Data Science"
                   value={newClassName}
                   onChange={(e) => setNewClassName(e.target.value)}
+                  placeholder="e.g. 1-IT-A, 3-MECH, B.Tech CSE"
                   required
+                  autoFocus
                 />
               </div>
-
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button type="button" onClick={() => setIsAddClassModalOpen(false)} className="btn-secondary">
                   Cancel

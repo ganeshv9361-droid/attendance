@@ -339,24 +339,29 @@ export default function Login({ onLoginSuccess }) {
                   <span>Connection / Login Notice</span>
                 </div>
                 <div>{error}</div>
-                {error.includes('Cannot reach backend server') && (
-                  <button
-                    type="button"
-                    onClick={() => setShowServerConfig(true)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--accent-primary)',
-                      textAlign: 'left',
-                      padding: 0,
-                      fontWeight: 700,
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                      marginTop: '4px'
-                    }}
-                  >
-                    Click here to check/update Server Wi-Fi IP
-                  </button>
+                {(error.includes('Cannot reach') || error.includes('Connection failed') || error.includes('Failed to fetch') || error.includes('timed out')) && (
+                  <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSaveServerUrl(DEFAULT_SERVER_URL);
+                        setError('');
+                        testServerConnection();
+                      }}
+                      className="btn-primary"
+                      style={{ padding: '6px 12px', fontSize: '0.78rem', backgroundColor: '#2563eb' }}
+                    >
+                      ☁️ Connect via Cloud Server (Render)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowServerConfig(true)}
+                      className="btn-secondary"
+                      style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                    >
+                      ⚙️ Edit Server IP
+                    </button>
+                  </div>
                 )}
               </div>
             )}

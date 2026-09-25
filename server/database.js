@@ -108,6 +108,37 @@ export async function initDatabase() {
   if (isCloudMode) {
     console.log('Validating Supabase PostgreSQL connection & Master Administrator...');
     try {
+      // 1. Ensure students table has year, branch, section, phone columns
+      await pool.query(`
+        ALTER TABLE students ADD COLUMN IF NOT EXISTS year TEXT;
+        ALTER TABLE students ADD COLUMN IF NOT EXISTS branch TEXT;
+        ALTER TABLE students ADD COLUMN IF NOT EXISTS section TEXT;
+        ALTER TABLE students ADD COLUMN IF NOT EXISTS phone TEXT;
+      `);
+
+      // 2. Ensure default college departments exist if classes is empty
+      const classesCount = await pool.query('SELECT COUNT(*) FROM classes');
+      if (parseInt(classesCount.rows[0].count) === 0) {
+        console.log('Seeding standard college departments on Supabase...');
+        const initialClasses = [
+          ['1-CSE-A', 'First Year CSE - Section A', 'Hall 101', 'Prof. Alan Turing'],
+          ['1-CSE-B', 'First Year CSE - Section B', 'Hall 102', 'Prof. Ada Lovelace'],
+          ['2-CSE', 'Second Year CSE', 'Hall 201', 'Dr. Donald Knuth'],
+          ['3-CSE', 'Third Year CSE', 'Hall 301', 'Dr. Tim Berners-Lee'],
+          ['4-CSE', 'Final Year CSE', 'Lab 401', 'Dr. Dennis Ritchie'],
+          ['1-ECE-A', 'First Year ECE - Section A', 'Hall 105', 'Dr. Nikola Tesla'],
+          ['2-ECE', 'Second Year ECE', 'Hall 205', 'Prof. Claude Shannon'],
+          ['1-MECH-A', 'First Year MECH - Section A', 'Hall 108', 'Prof. James Watt']
+        ];
+        for (const [cid, cname, room, teacher] of initialClasses) {
+          await pool.query(
+            'INSERT INTO classes (id, name, room, teacher_name) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
+            [cid, cname, room, teacher]
+          );
+        }
+      }
+
+      // 3. Ensure master admin
       const res = await pool.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
       if (res.rows.length === 0) {
         await pool.query(`
@@ -120,7 +151,7 @@ export async function initDatabase() {
         console.log('Master Administrator verified on Supabase.');
       }
     } catch (err) {
-      console.warn('Could not query users table directly. Please make sure supabase_schema.sql was run in Supabase SQL Editor:', err.message);
+      console.warn('Could not query users/classes table directly:', err.message);
     }
     return;
   }
@@ -158,10 +189,20 @@ export async function initDatabase() {
       parent_phone TEXT,
       email TEXT,
       qr_token TEXT NOT NULL,
+      year TEXT,
+      branch TEXT,
+      section TEXT,
+      phone TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(class_id) REFERENCES classes(id)
     )
   `);
+
+  // Migrate existing SQLite tables to include new columns if missing
+  try { await run('ALTER TABLE students ADD COLUMN year TEXT'); } catch(e) {}
+  try { await run('ALTER TABLE students ADD COLUMN branch TEXT'); } catch(e) {}
+  try { await run('ALTER TABLE students ADD COLUMN section TEXT'); } catch(e) {}
+  try { await run('ALTER TABLE students ADD COLUMN phone TEXT'); } catch(e) {}
 
   await run(`
     CREATE TABLE IF NOT EXISTS holidays (
