@@ -35,14 +35,33 @@ export default function AdminDashboard({ onNavigate }) {
     setIsDownloading(true);
     try {
       const baseUrl = getApiBaseUrl();
+      const downloadUrl = `${baseUrl}/api/attendance/export-excel?date=${date}`;
+      const filename = `Attendance_${date}_All_Classes.xlsx`;
+
+      const res = await fetch(downloadUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(blobUrl);
+      }, 200);
+    } catch (err) {
+      console.error('Excel download failed:', err);
+      // Fallback
+      const baseUrl = getApiBaseUrl();
       const link = document.createElement('a');
       link.href = `${baseUrl}/api/attendance/export-excel?date=${date}`;
       link.setAttribute('download', `Attendance_${date}_All_Classes.xlsx`);
+      link.target = '_blank';
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      console.error('Excel download failed:', err);
+      setTimeout(() => document.body.removeChild(link), 200);
     } finally {
       setIsDownloading(false);
     }

@@ -168,18 +168,35 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
   };
 
   // Trigger Excel Report Download
-  const handleDownloadExcel = (customClassId = selectedClassId) => {
+  const handleDownloadExcel = async (customClassId = selectedClassId) => {
     const baseUrl = getApiBaseUrl();
     const downloadUrl = `${baseUrl}/api/attendance/export-excel?date=${date}&classId=${encodeURIComponent(customClassId || '')}`;
-    
-    // Create hidden link and click
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.setAttribute('download', `Attendance_${date}_${customClassId || 'All'}.xlsx`);
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const filename = `Attendance_${date}_${customClassId || 'All'}.xlsx`;
+
+    try {
+      const res = await fetch(downloadUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
+      }, 200);
+    } catch (e) {
+      console.warn('Direct blob download fallback:', e);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.setAttribute('download', filename);
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => document.body.removeChild(a), 200);
+    }
   };
 
   // Save manual attendance & automatically download Excel if afternoon session
