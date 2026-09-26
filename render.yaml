@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     rootDir: server
-    buildCommand: npm install
+    buildCommand: npm install --no-audit
     startCommand: node server.js
     healthCheckPath: /api/health
     envVars:
