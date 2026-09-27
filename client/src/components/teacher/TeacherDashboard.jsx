@@ -101,10 +101,8 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     try {
       const data = await apiFetch('/api/classes');
       setClasses(data);
-      if (!selectedClassId && data.length > 0) {
-        setSelectedClassId(data[0].id);
-      } else if (selectedClassId && !data.some(c => c.id === selectedClassId)) {
-        if (data.length > 0) setSelectedClassId(data[0].id);
+      if (!selectedClassId) {
+        setSelectedClassId('ALL');
       }
     } catch (err) {
       console.error('Failed to load classes:', err);
@@ -112,13 +110,20 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
   };
 
   const fetchStudentsAndAttendance = async () => {
-    if (!selectedClassId) return;
     setLoading(true);
     try {
-      const stuData = await apiFetch(`/api/students?classId=${encodeURIComponent(selectedClassId)}`);
-      setStudents(stuData);
+      const isAll = !selectedClassId || selectedClassId === 'ALL';
+      const stuUrl = isAll ? '/api/students' : `/api/students?classId=${encodeURIComponent(selectedClassId)}`;
+      const attUrl = isAll 
+        ? `/api/attendance?date=${date}&session=${session}`
+        : `/api/attendance?classId=${encodeURIComponent(selectedClassId)}&date=${date}&session=${session}`;
 
-      const attData = await apiFetch(`/api/attendance?classId=${encodeURIComponent(selectedClassId)}&date=${date}&session=${session}`);
+      const [stuData, attData] = await Promise.all([
+        apiFetch(stuUrl),
+        apiFetch(attUrl)
+      ]);
+
+      setStudents(stuData);
 
       const map = {};
       for (const s of stuData) {
@@ -137,6 +142,8 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
 
   // Toggle individual student attendance
   const toggleStudent = async (studentId) => {
+    const student = students.find(s => s.id === studentId);
+    const targetClassId = student?.class_id || (selectedClassId === 'ALL' ? 'General' : selectedClassId);
     const newStatus = attendanceMap[studentId] === 'PRESENT' ? 'ABSENT' : 'PRESENT';
     setAttendanceMap(prev => ({
       ...prev,
@@ -150,8 +157,8 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
         body: JSON.stringify({
           date,
           session,
-          classId: selectedClassId,
-          records: [{ studentId, classId: selectedClassId, status: newStatus }]
+          classId: targetClassId,
+          records: [{ studentId, classId: targetClassId, status: newStatus }]
         })
       });
     } catch (err) {
@@ -170,8 +177,9 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
   // Trigger Excel Report Download
   const handleDownloadExcel = async (customClassId = selectedClassId) => {
     const baseUrl = getApiBaseUrl();
-    const downloadUrl = `${baseUrl}/api/attendance/export-excel?date=${date}&classId=${encodeURIComponent(customClassId || '')}`;
-    const filename = `Attendance_${date}_${customClassId || 'All'}.xlsx`;
+    const targetClass = (customClassId === 'ALL' || !customClassId) ? '' : customClassId;
+    const downloadUrl = `${baseUrl}/api/attendance/export-excel?date=${date}&classId=${encodeURIComponent(targetClass)}`;
+    const filename = `Attendance_${date}_${targetClass || 'All_Classes'}.xlsx`;
 
     try {
       const res = await fetch(downloadUrl);
@@ -205,7 +213,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     try {
       const records = students.map(s => ({
         studentId: s.id,
-        classId: selectedClassId,
+        classId: s.class_id || (selectedClassId === 'ALL' ? 'General' : selectedClassId),
         status: attendanceMap[s.id] || 'ABSENT'
       }));
 
@@ -215,7 +223,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
         body: JSON.stringify({
           date,
           session,
-          classId: selectedClassId,
+          classId: selectedClassId === 'ALL' ? undefined : selectedClassId,
           records
         })
       });
@@ -335,7 +343,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
         body: JSON.stringify({
           date,
           session,
-          classId: selectedClassId,
+          classId: selectedClassId === 'ALL' ? undefined : selectedClassId,
           qrData: decodedText
         })
       });
@@ -346,30 +354,36 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       }));
 
       setRecentScans(prev => [
-        { student: data.student, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), alreadyMarked: data.alreadyMarked },
-        ...prev.slice(0, 4)
+        { 
+          student: data.student, 
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), 
+          alreadyMarked: data.alreadyMarked 
+        },
+        ...prev.slice(0, 5)
       ]);
 
       if (data.alreadyMarked) {
         playBeep(600, 0.1);
         setScanFeedback({
           type: 'warning',
-          text: `${data.student.name} (#${data.student.rollNo}) was already marked PRESENT today!`
+          text: `ℹ️ ${data.student.name} (#${data.student.rollNo}) from ${data.student.className} was already marked PRESENT today!`
         });
       } else {
         playBeep(1046, 0.15);
-        confetti({ particleCount: 30, spread: 50, origin: { y: 0.7 } });
+        confetti({ particleCount: 35, spread: 55, origin: { y: 0.7 } });
         setScanFeedback({
           type: 'success',
-          text: `Verified! ${data.student.name} (#${data.student.rollNo}) marked PRESENT.`
+          text: `✅ Verified! ${data.student.name} (#${data.student.rollNo}) marked PRESENT in ${data.student.className}!`
         });
       }
+
+      fetchStudentsAndAttendance();
     } catch (err) {
       console.error('Error processing scan:', err);
       playBeep(350, 0.2);
       setScanFeedback({
         type: 'error',
-        text: err.message || 'QR Scan error. Student may belong to another class.'
+        text: err.message || 'QR code could not be verified in the database.'
       });
     }
   };
@@ -380,7 +394,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     let yr = '1st Year';
     let br = 'CSE';
     let sec = 'A';
-    if (selectedClassId) {
+    if (selectedClassId && selectedClassId !== 'ALL') {
       const parts = selectedClassId.split('-');
       if (parts[0] === '1') yr = '1st Year';
       else if (parts[0] === '2') yr = '2nd Year';
@@ -391,14 +405,14 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     }
 
     setStudentForm({
-      rollNo: students.length > 0 ? Math.max(...students.map(s => Number(s.roll_no) || 0)) + 1 : 101,
+      rollNo: students.length > 0 ? Math.max(...students.map(s => Number(s.roll_no) || 0)) + 1 : '',
       name: '',
       year: yr,
       branch: br,
       section: yr === '1st Year' ? sec : '',
       email: '',
       phone: '',
-      classId: selectedClassId,
+      classId: selectedClassId === 'ALL' ? '' : selectedClassId,
       gender: 'Male'
     });
     setAddStudentError('');
@@ -414,7 +428,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...studentForm,
-          classId: selectedClassId,
+          classId: selectedClassId === 'ALL' ? undefined : selectedClassId,
           parentPhone: studentForm.phone
         })
       });
@@ -485,7 +499,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
   return (
     <div>
       {/* Top Header & Context Controls */}
-      <div className="card-header" style={{ marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
+      <div className="station-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <h1 className="card-title" style={{ fontSize: '1.5rem' }}>
@@ -496,12 +510,14 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
             </span>
           </div>
           <p className="card-subtitle">
-            Roll call & QR check-in for <strong>{selectedClassId || 'Selected Class'}</strong> • Stored as daily Excel report
+            {selectedClassId === 'ALL'
+              ? '✨ Universal Auto-Detect Mode • Scan any student QR to instantly mark attendance in their class'
+              : `Roll call & QR check-in for ${selectedClassId} • Scanned QRs automatically routed`}
           </p>
         </div>
 
         {/* Action Controls: Class Selector, Excel Download */}
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="action-controls-wrap">
           {/* Class Chooser Dropdown */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <select
@@ -515,6 +531,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                 backgroundColor: 'var(--bg-card)'
               }}
             >
+              <option value="ALL">✨ All Classes (Auto-Detect QR)</option>
               {classes.map(c => (
                 <option key={c.id} value={c.id}>
                   {c.id} - {c.name}
@@ -677,7 +694,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       )}
 
       {/* 3 Key Metric Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '18px' }}>
+      <div className="kpi-cards-grid">
         <div className="card" style={{ padding: '14px', textAlign: 'center' }}>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
             Total Enrolled
@@ -686,7 +703,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
             {totalStudents}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            Class {selectedClassId}
+            {selectedClassId === 'ALL' ? 'Across All Classes' : `Class ${selectedClassId}`}
           </div>
         </div>
 
@@ -715,8 +732,8 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
         </div>
       </div>
 
-      {/* Main Two-Column Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: '16px', alignItems: 'start' }}>
+      {/* Main Responsive Two-Column Layout */}
+      <div className="attendance-split-layout">
         {/* LEFT COLUMN: QR Scanner OR Manual Checklist */}
         <div>
           {mode === 'qr' ? (
@@ -1120,8 +1137,17 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                         <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>
                           #{s.roll_no} {s.name}
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          {s.year || ''} {s.branch || ''} {s.section ? `• Sec ${s.section}` : ''}
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                          <span style={{
+                            fontWeight: 700,
+                            color: 'var(--accent-primary)',
+                            backgroundColor: 'var(--accent-light)',
+                            padding: '1px 6px',
+                            borderRadius: '4px'
+                          }}>
+                            {s.class_id}
+                          </span>
+                          <span>{s.year || ''} {s.branch || ''} {s.section ? `• Sec ${s.section}` : ''}</span>
                         </div>
                       </div>
 
@@ -1224,7 +1250,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                     type="text"
                     value={studentForm.name}
                     onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
-                    placeholder="e.g. Michael Scott"
+                    placeholder="Enter Student Full Name"
                     required
                   />
                 </div>
@@ -1271,7 +1297,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                     type="text"
                     value={studentForm.branch}
                     onChange={(e) => setStudentForm({ ...studentForm, branch: e.target.value.toUpperCase() })}
-                    placeholder="CSE"
+                    placeholder="e.g. CSE"
                     required
                     style={{ width: '100%', textTransform: 'uppercase' }}
                   />
@@ -1307,7 +1333,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                     type="tel"
                     value={studentForm.phone}
                     onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })}
-                    placeholder="9876543210"
+                    placeholder="Enter Phone Number"
                     required
                   />
                 </div>
@@ -1319,7 +1345,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                     type="email"
                     value={studentForm.email}
                     onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })}
-                    placeholder="student@college.edu"
+                    placeholder="Enter College Mail ID"
                     required
                   />
                 </div>
@@ -1362,7 +1388,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                   type="text"
                   value={newClassName}
                   onChange={(e) => setNewClassName(e.target.value)}
-                  placeholder="e.g. 1-IT-A, 3-MECH, B.Tech CSE"
+                  placeholder="Enter Class ID (e.g. 1-CSE-A, 2-ECE)"
                   required
                   autoFocus
                 />

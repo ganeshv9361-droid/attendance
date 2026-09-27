@@ -101,7 +101,7 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
     const defaultBranch = 'CSE';
     const defaultSec = 'A';
     setFormData({
-      rollNo: students.length > 0 ? Math.max(...students.map(s => Number(s.roll_no) || 0)) + 1 : 101,
+      rollNo: students.length > 0 ? Math.max(...students.map(s => Number(s.roll_no) || 0)) + 1 : '',
       name: '',
       year: defaultYear,
       branch: defaultBranch,
@@ -426,7 +426,7 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
 
             <form onSubmit={handleSaveStudent}>
               {/* Row 1: Roll No & Full Name */}
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
                     Roll No *
@@ -435,11 +435,11 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
                     type="number"
                     value={formData.rollNo}
                     onChange={(e) => handleFieldChange('rollNo', e.target.value)}
-                    placeholder="101"
+                    placeholder="Enter Roll No"
                     required
                   />
                 </div>
-                <div>
+                <div style={{ flex: '2 1 200px' }}>
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
                     Student Full Name *
                   </label>
@@ -447,7 +447,7 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
                     type="text"
                     value={formData.name}
                     onChange={(e) => handleFieldChange('name', e.target.value)}
-                    placeholder="e.g. John Doe"
+                    placeholder="Enter Student Full Name"
                     required
                   />
                 </div>
@@ -456,7 +456,7 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
               {/* Row 2: Year, Branch, and Section (Section shown for 1st Year ALONE) */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: isFirstYear ? '1fr 1fr 1fr' : '1fr 1fr',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
                 gap: '12px',
                 marginBottom: '14px',
                 padding: '12px',
@@ -489,7 +489,7 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
                     list="branch-suggestions"
                     value={formData.branch}
                     onChange={(e) => handleFieldChange('branch', e.target.value)}
-                    placeholder="e.g. CSE"
+                    placeholder="Branch code"
                     required
                     style={{ width: '100%', fontWeight: 600, textTransform: 'uppercase' }}
                   />
@@ -541,7 +541,7 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
               </div>
 
               {/* Row 3: Common Mail ID & Phone Number */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
                     Phone Number *
@@ -550,7 +550,7 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => handleFieldChange('phone', e.target.value)}
-                    placeholder="e.g. 9876543210"
+                    placeholder="Enter phone number"
                     required
                   />
                 </div>
@@ -562,7 +562,7 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
                     type="email"
                     value={formData.email}
                     onChange={(e) => handleFieldChange('email', e.target.value)}
-                    placeholder="e.g. student@college.edu"
+                    placeholder="Enter student email"
                     required
                   />
                 </div>

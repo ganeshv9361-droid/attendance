@@ -352,46 +352,56 @@ export default function AdminDashboard({ onNavigate }) {
               </tr>
             </thead>
             <tbody>
-              {summaryData?.classSummaries?.map(c => (
-                <tr key={c.classId}>
-                  <td style={{ fontWeight: 700 }}>
-                    <span style={{
-                      backgroundColor: 'var(--accent-light)',
-                      color: 'var(--accent-primary)',
-                      padding: '2px 8px',
-                      borderRadius: '4px'
-                    }}>
-                      {c.classId}
-                    </span>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>{c.className}</td>
-                  <td>{c.teacherName || 'N/A'}</td>
-                  <td>{c.room || 'N/A'}</td>
-                  <td style={{ fontWeight: 700 }}>{c.totalStudents}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    <span style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      fontWeight: 700,
-                      color: c.morning.percentage > 75 ? 'var(--present-color)' : 'var(--absent-color)'
-                    }}>
-                      {c.morning.percentage}% ({c.morning.present}P / {c.morning.absent}A)
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <span style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      fontWeight: 700,
-                      color: c.afternoon.percentage > 75 ? 'var(--present-color)' : 'var(--absent-color)'
-                    }}>
-                      {c.afternoon.percentage}% ({c.afternoon.present}P / {c.afternoon.absent}A)
-                    </span>
+              {!summaryData?.classSummaries || summaryData.classSummaries.length === 0 ? (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--text-muted)' }}>
+                    <School size={32} style={{ margin: '0 auto 8px', opacity: 0.5, display: 'block' }} />
+                    <div style={{ fontWeight: 600 }}>No departments or classes registered yet</div>
+                    <div style={{ fontSize: '0.82rem', marginTop: '4px' }}>Go to "Student Database" or "Faculty & Departments" to enroll students and batches.</div>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                summaryData.classSummaries.map(c => (
+                  <tr key={c.classId}>
+                    <td style={{ fontWeight: 700 }}>
+                      <span style={{
+                        backgroundColor: 'var(--accent-light)',
+                        color: 'var(--accent-primary)',
+                        padding: '2px 8px',
+                        borderRadius: '4px'
+                      }}>
+                        {c.classId}
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{c.className}</td>
+                    <td>{c.teacherName || 'N/A'}</td>
+                    <td>{c.room || 'N/A'}</td>
+                    <td style={{ fontWeight: 700 }}>{c.totalStudents}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontWeight: 700,
+                        color: c.morning.percentage > 75 ? 'var(--present-color)' : 'var(--absent-color)'
+                      }}>
+                        {c.morning.percentage}% ({c.morning.present}P / {c.morning.absent}A)
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontWeight: 700,
+                        color: c.afternoon.percentage > 75 ? 'var(--present-color)' : 'var(--absent-color)'
+                      }}>
+                        {c.afternoon.percentage}% ({c.afternoon.present}P / {c.afternoon.absent}A)
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

@@ -232,73 +232,83 @@ export default function FacultyManager({ onBack }) {
               </tr>
             </thead>
             <tbody>
-              {teachers.map(t => (
-                <tr key={t.id}>
-                  <td style={{ fontWeight: 700 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--accent-light)',
-                        color: 'var(--accent-primary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 800,
-                        fontSize: '0.85rem'
-                      }}>
-                        {t.full_name?.charAt(0) || 'F'}
-                      </div>
-                      <span>{t.full_name}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span style={{ fontFamily: 'monospace', backgroundColor: 'var(--bg-card-subtle)', padding: '2px 8px', borderRadius: '4px' }}>
-                      {t.username}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="user-role-badge badge-teacher">Faculty</span>
-                  </td>
-                  <td>
-                    {t.assigned_class_id ? (
-                      <span style={{
-                        backgroundColor: 'var(--accent-light)',
-                        color: 'var(--accent-primary)',
-                        fontWeight: 700,
-                        padding: '3px 8px',
-                        borderRadius: '4px',
-                        fontSize: '0.82rem'
-                      }}>
-                        {t.assigned_class_id} • {t.class_name || ''}
-                      </span>
-                    ) : (
-                      <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '8px' }}>
-                      <button
-                        onClick={() => handleOpenEditFaculty(t)}
-                        className="btn-secondary"
-                        style={{ padding: '6px 10px' }}
-                        title="Edit Faculty Account"
-                      >
-                        <Edit2 size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteFaculty(t.id, t.full_name)}
-                        className="btn-outline-danger"
-                        style={{ padding: '6px 10px' }}
-                        title="Delete Faculty Account"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
+              {teachers.length === 0 ? (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--text-muted)' }}>
+                    <UserCheck size={32} style={{ margin: '0 auto 8px', opacity: 0.5, display: 'block' }} />
+                    <div style={{ fontWeight: 600 }}>No faculty accounts registered yet</div>
+                    <div style={{ fontSize: '0.82rem', marginTop: '4px' }}>Click "Create Faculty User ID" above to add your teachers.</div>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                teachers.map(t => (
+                  <tr key={t.id}>
+                    <td style={{ fontWeight: 700 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          backgroundColor: 'var(--accent-light)',
+                          color: 'var(--accent-primary)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 800,
+                          fontSize: '0.85rem'
+                        }}>
+                          {t.full_name?.charAt(0) || 'F'}
+                        </div>
+                        <span>{t.full_name}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{ fontFamily: 'monospace', backgroundColor: 'var(--bg-card-subtle)', padding: '2px 8px', borderRadius: '4px' }}>
+                        {t.username}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="user-role-badge badge-teacher">Faculty</span>
+                    </td>
+                    <td>
+                      {t.assigned_class_id ? (
+                        <span style={{
+                          backgroundColor: 'var(--accent-light)',
+                          color: 'var(--accent-primary)',
+                          fontWeight: 700,
+                          padding: '3px 8px',
+                          borderRadius: '4px',
+                          fontSize: '0.82rem'
+                        }}>
+                          {t.assigned_class_id} • {t.class_name || ''}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '8px' }}>
+                        <button
+                          onClick={() => handleOpenEditFaculty(t)}
+                          className="btn-secondary"
+                          style={{ padding: '6px 10px' }}
+                          title="Edit Faculty Account"
+                        >
+                          <Edit2 size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteFaculty(t.id, t.full_name)}
+                          className="btn-outline-danger"
+                          style={{ padding: '6px 10px' }}
+                          title="Delete Faculty Account"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -319,44 +329,54 @@ export default function FacultyManager({ onBack }) {
               </tr>
             </thead>
             <tbody>
-              {classes.map(c => (
-                <tr key={c.id}>
-                  <td style={{ fontWeight: 800 }}>
-                    <span style={{
-                      backgroundColor: 'var(--accent-light)',
-                      color: 'var(--accent-primary)',
-                      padding: '3px 8px',
-                      borderRadius: '4px'
-                    }}>
-                      {c.id}
-                    </span>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>{c.name}</td>
-                  <td>{c.room || 'N/A'}</td>
-                  <td>{c.teacher_name || 'Not assigned'}</td>
-                  <td style={{ fontWeight: 700 }}>{c.studentCount} students</td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '8px' }}>
-                      <button
-                        onClick={() => handleOpenEditDept(c)}
-                        className="btn-secondary"
-                        style={{ padding: '6px 10px' }}
-                        title="Edit Department"
-                      >
-                        <Edit2 size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteDept(c.id, c.name)}
-                        className="btn-outline-danger"
-                        style={{ padding: '6px 10px' }}
-                        title="Delete Department"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
+              {classes.length === 0 ? (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--text-muted)' }}>
+                    <BookOpen size={32} style={{ margin: '0 auto 8px', opacity: 0.5, display: 'block' }} />
+                    <div style={{ fontWeight: 600 }}>No classes or departments created yet</div>
+                    <div style={{ fontSize: '0.82rem', marginTop: '4px' }}>Click "Add Department" above or enroll students to register departments.</div>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                classes.map(c => (
+                  <tr key={c.id}>
+                    <td style={{ fontWeight: 800 }}>
+                      <span style={{
+                        backgroundColor: 'var(--accent-light)',
+                        color: 'var(--accent-primary)',
+                        padding: '3px 8px',
+                        borderRadius: '4px'
+                      }}>
+                        {c.id}
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{c.name}</td>
+                    <td>{c.room || 'N/A'}</td>
+                    <td>{c.teacher_name || 'Not assigned'}</td>
+                    <td style={{ fontWeight: 700 }}>{c.studentCount} students</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '8px' }}>
+                        <button
+                          onClick={() => handleOpenEditDept(c)}
+                          className="btn-secondary"
+                          style={{ padding: '6px 10px' }}
+                          title="Edit Department"
+                        >
+                          <Edit2 size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDept(c.id, c.name)}
+                          className="btn-outline-danger"
+                          style={{ padding: '6px 10px' }}
+                          title="Delete Department"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -385,21 +405,21 @@ export default function FacultyManager({ onBack }) {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Dr. Arvind Kumar"
+                  placeholder="Enter Faculty Full Name"
                   value={facultyForm.fullName}
                   onChange={(e) => setFacultyForm({ ...facultyForm, fullName: e.target.value })}
                   required
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '14px', marginBottom: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
                     Username / User ID *
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. arvind_cse"
+                    placeholder="Enter User ID"
                     value={facultyForm.username}
                     onChange={(e) => setFacultyForm({ ...facultyForm, username: e.target.value })}
                     required
@@ -426,7 +446,7 @@ export default function FacultyManager({ onBack }) {
                 <input
                   type="text"
                   list="faculty-course-suggestions"
-                  placeholder="Type course name (e.g. Data Structures, Python, CSE-A)"
+                  placeholder="Type course or subject name (optional)"
                   value={facultyForm.assignedClassId}
                   onChange={(e) => setFacultyForm({ ...facultyForm, assignedClassId: e.target.value })}
                 />
@@ -475,27 +495,27 @@ export default function FacultyManager({ onBack }) {
             </div>
 
             <form onSubmit={handleSaveDept}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '14px', marginBottom: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '14px', marginBottom: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
                     Dept Code *
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. IT-3B"
+                    placeholder="Enter code (e.g. 1-CSE-A)"
                     value={deptForm.id}
                     disabled={!!editingDept}
                     onChange={(e) => setDeptForm({ ...deptForm, id: e.target.value })}
                     required
                   />
                 </div>
-                <div>
+                <div style={{ flex: '2 1 180px' }}>
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
                     Department & Batch Name *
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. B.Tech Information Tech - 3rd Year"
+                    placeholder="Enter Department & Batch name"
                     value={deptForm.name}
                     onChange={(e) => setDeptForm({ ...deptForm, name: e.target.value })}
                     required
@@ -503,14 +523,14 @@ export default function FacultyManager({ onBack }) {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '14px', marginBottom: '24px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-secondary)' }}>
                     Lecture Room / Lab
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Computing Lab 3"
+                    placeholder="Room or Lab (optional)"
                     value={deptForm.room}
                     onChange={(e) => setDeptForm({ ...deptForm, room: e.target.value })}
                   />
@@ -521,7 +541,7 @@ export default function FacultyManager({ onBack }) {
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Dr. Jane Foster"
+                    placeholder="Faculty Incharge name (optional)"
                     value={deptForm.teacherName}
                     onChange={(e) => setDeptForm({ ...deptForm, teacherName: e.target.value })}
                   />

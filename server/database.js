@@ -144,27 +144,7 @@ export async function initDatabase() {
         ALTER TABLE students ADD COLUMN IF NOT EXISTS phone TEXT;
       `);
 
-      // 2. Ensure default college departments exist if classes is empty
-      const classesCount = await safePgQuery('SELECT COUNT(*) FROM classes');
-      if (parseInt(classesCount.rows[0].count) === 0) {
-        console.log('Seeding standard college departments on Supabase...');
-        const initialClasses = [
-          ['1-CSE-A', 'First Year CSE - Section A', 'Hall 101', 'Prof. Alan Turing'],
-          ['1-CSE-B', 'First Year CSE - Section B', 'Hall 102', 'Prof. Ada Lovelace'],
-          ['2-CSE', 'Second Year CSE', 'Hall 201', 'Dr. Donald Knuth'],
-          ['3-CSE', 'Third Year CSE', 'Hall 301', 'Dr. Tim Berners-Lee'],
-          ['4-CSE', 'Final Year CSE', 'Lab 401', 'Dr. Dennis Ritchie'],
-          ['1-ECE-A', 'First Year ECE - Section A', 'Hall 105', 'Dr. Nikola Tesla'],
-          ['2-ECE', 'Second Year ECE', 'Hall 205', 'Prof. Claude Shannon'],
-          ['1-MECH-A', 'First Year MECH - Section A', 'Hall 108', 'Prof. James Watt']
-        ];
-        for (const [cid, cname, room, teacher] of initialClasses) {
-          await safePgQuery(
-            'INSERT INTO classes (id, name, room, teacher_name) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING',
-            [cid, cname, room, teacher]
-          );
-        }
-      }
+      // Ensure classes table is ready without seeding demo data
 
       // 3. Ensure master admin
       const res = await safePgQuery("SELECT id FROM users WHERE role = 'admin' LIMIT 1");

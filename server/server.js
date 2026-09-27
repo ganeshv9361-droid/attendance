@@ -317,6 +317,24 @@ app.get('/api/students', async (req, res) => {
   }
 });
 
+app.get('/api/students/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const student = await get(`
+      SELECT s.*, c.name as class_name 
+      FROM students s 
+      LEFT JOIN classes c ON s.class_id = c.id 
+      WHERE s.id = ? OR s.qr_token = ? OR CAST(s.roll_no AS TEXT) = ?
+    `, [id, id, id]);
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+    res.json(student);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/students', async (req, res) => {
   try {
     const { rollNo, name, gender, classId, parentName, parentPhone, email, year, branch, section, phone } = req.body;
@@ -382,7 +400,13 @@ app.post('/api/students', async (req, res) => {
       phone || parentPhone || ''
     ]);
 
-    res.status(201).json({ success: true, studentId, message: 'Student registered successfully' });
+    res.status(201).json({ 
+      success: true, 
+      studentId, 
+      classId: cleanClassId,
+      qrToken,
+      message: 'Student registered successfully' 
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -576,7 +600,7 @@ app.post('/api/attendance/mark', async (req, res) => {
 
     const activeSession = session.toUpperCase();
 
-    // 1. Single QR Scan
+    // 1. Single QR Scan - Automatically detect student & assign attendance to their specific class
     if (qrData || studentId) {
       let targetStudentId = studentId;
 
@@ -593,27 +617,29 @@ app.post('/api/attendance/mark', async (req, res) => {
         return res.status(400).json({ error: 'Valid Student ID or QR code is required' });
       }
 
-      let student = await get('SELECT * FROM students WHERE id = ?', [targetStudentId]);
+      let student = await get(`
+        SELECT s.*, c.name as class_name 
+        FROM students s 
+        LEFT JOIN classes c ON s.class_id = c.id 
+        WHERE s.id = ? OR s.qr_token = ? OR LOWER(s.id) = LOWER(?)
+      `, [targetStudentId, qrData || targetStudentId, targetStudentId]);
+
       if (!student && qrData) {
-        student = await get('SELECT * FROM students WHERE qr_token = ? OR id = ?', [qrData, targetStudentId]);
+        student = await get(`
+          SELECT s.*, c.name as class_name 
+          FROM students s 
+          LEFT JOIN classes c ON s.class_id = c.id 
+          WHERE CAST(s.roll_no AS TEXT) = ? OR s.roll_no = ?
+        `, [String(targetStudentId), Number(targetStudentId) || 0]);
       }
 
       if (!student) {
         return res.status(404).json({ error: `Student with ID "${targetStudentId}" not found in database` });
       }
 
-      // Check student class (case-insensitive and resilient to name vs id)
-      if (classId && student.class_id && student.class_id.trim().toLowerCase() !== classId.trim().toLowerCase()) {
-        const classMatch = await get(
-          'SELECT id FROM classes WHERE (id = ? OR LOWER(name) = LOWER(?)) AND (id = ? OR LOWER(name) = LOWER(?))',
-          [student.class_id, student.class_id, classId, classId]
-        );
-        if (!classMatch) {
-          return res.status(400).json({
-            error: `Student ${student.name} belongs to "${student.class_id}", but active session is for "${classId}".`
-          });
-        }
-      }
+      // Automatically route attendance to student's particular class!
+      const targetClassId = student.class_id || 'General';
+      const className = student.class_name || targetClassId;
 
       // Check if already marked present
       const existing = await get(
@@ -626,7 +652,7 @@ app.post('/api/attendance/mark', async (req, res) => {
       await run(`
         INSERT OR REPLACE INTO attendance (date, session, student_id, class_id, status, method, marked_at)
         VALUES (?, ?, ?, ?, 'PRESENT', 'QR', CURRENT_TIMESTAMP)
-      `, [date, activeSession, student.id, student.class_id]);
+      `, [date, activeSession, student.id, targetClassId]);
 
       return res.json({
         success: true,
@@ -635,12 +661,18 @@ app.post('/api/attendance/mark', async (req, res) => {
           id: student.id,
           rollNo: student.roll_no,
           name: student.name,
-          classId: student.class_id,
+          classId: targetClassId,
+          className,
+          year: student.year,
+          branch: student.branch,
+          section: student.section,
+          phone: student.phone || student.parent_phone,
+          email: student.email,
           session: activeSession
         },
         message: isAlreadyPresent
-          ? `${student.name} was already marked PRESENT for ${activeSession}`
-          : `Successfully marked ${student.name} PRESENT for ${activeSession}`
+          ? `${student.name} (#${student.roll_no}) was already marked PRESENT today in ${className}`
+          : `✅ Verified! ${student.name} (#${student.roll_no}) marked PRESENT in ${className}`
       });
     }
 
