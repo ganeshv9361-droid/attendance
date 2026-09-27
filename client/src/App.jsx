@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { School, LogOut, ShieldCheck, UserCheck } from 'lucide-react';
+import { School, LogOut, ShieldCheck, UserCheck, Smartphone } from 'lucide-react';
 import Login from './components/Login';
 import ThemeToggle from './components/common/ThemeToggle';
 import AdminDashboard from './components/admin/AdminDashboard';
@@ -68,6 +68,18 @@ export default function App() {
               {user.role}
             </span>
           </div>
+
+          {/* Android APK Download Button */}
+          <a
+            href="/EduTrack-Attendance.apk"
+            download="EduTrack-Attendance.apk"
+            className="btn-secondary"
+            style={{ padding: '8px 12px', fontSize: '0.82rem', gap: '6px', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.35)' }}
+            title="Download Android APK File"
+          >
+            <Smartphone size={16} />
+            <span className="hide-mobile">Get APK</span>
+          </a>
 
           {/* Theme Toggle (Dark / Light) */}
           <ThemeToggle />

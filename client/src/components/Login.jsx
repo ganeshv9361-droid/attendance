@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   School, ShieldCheck, UserCheck, Lock, User, Eye, EyeOff, Sparkles, 
-  ArrowRight, QrCode, FileSpreadsheet, Clock, Wifi, Settings, CheckCircle2, AlertCircle 
+  ArrowRight, QrCode, FileSpreadsheet, Clock, Wifi, Settings, CheckCircle2, AlertCircle,
+  Smartphone
 } from 'lucide-react';
 import ThemeToggle from './common/ThemeToggle';
 import { apiFetch, getApiBaseUrl, setApiBaseUrl, DEFAULT_SERVER_URL } from '../utils/api';
@@ -120,8 +121,18 @@ export default function Login({ onLoginSuccess }) {
             title="Configure Backend Server IP / URL for Mobile APK"
           >
             <Wifi size={16} />
-            <span className="hide-mobile">Server Config</span>
+            <span className="hide-mobile">Server</span>
           </button>
+          <a
+            href="/EduTrack-Attendance.apk"
+            download="EduTrack-Attendance.apk"
+            className="btn-secondary"
+            style={{ padding: '8px 12px', fontSize: '0.8rem', gap: '6px', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.35)' }}
+            title="Download Android APK File directly"
+          >
+            <Smartphone size={16} />
+            <span className="hide-mobile">Get APK</span>
+          </a>
           <ThemeToggle />
         </div>
       </div>
