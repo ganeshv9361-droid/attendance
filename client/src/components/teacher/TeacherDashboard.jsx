@@ -10,7 +10,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import BackButton from '../common/BackButton';
 import { apiFetch, getApiBaseUrl } from '../../utils/api';
 
-const BRANCH_OPTIONS = ['CSE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'IT', 'AI&DS'];
+const BRANCH_OPTIONS = ['CSE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'IT', 'AI&DS', 'AI&ML', 'AGRI', 'CSD'];
 
 export default function TeacherDashboard({ user, onBack, onLogout }) {
   const [classes, setClasses] = useState([]);
@@ -1318,6 +1318,9 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                       <option value="B">Section B</option>
                       <option value="C">Section C</option>
                       <option value="D">Section D</option>
+                      <option value="E">Section E</option>
+                      <option value="F">Section F</option>
+                      <option value="G">Section G</option>
                     </select>
                   </div>
                 )}

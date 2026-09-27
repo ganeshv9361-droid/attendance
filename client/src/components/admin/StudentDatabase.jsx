@@ -10,7 +10,10 @@ const BRANCH_OPTIONS = [
   { code: 'MECH', label: 'MECH - Mechanical Engineering' },
   { code: 'CIVIL', label: 'CIVIL - Civil Engineering' },
   { code: 'IT', label: 'IT - Information Technology' },
-  { code: 'AI&DS', label: 'AI&DS - Artificial Intelligence & Data Science' }
+  { code: 'AI&DS', label: 'AI&DS - Artificial Intelligence & Data Science' },
+  { code: 'AI&ML', label: 'AI&ML - Artificial Intelligence & Machine Learning' },
+  { code: 'AGRI', label: 'AGRI - Agriculture' },
+  { code: 'CSD', label: 'CSD - Computer Science Design' }
 ];
 
 export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
@@ -135,7 +138,7 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
   const handleSaveStudent = async (e) => {
     e.preventDefault();
     try {
-      const url = editingStudent 
+      const url = editingStudent
         ? `/api/students/${editingStudent.id}`
         : '/api/students';
       const method = editingStudent ? 'PUT' : 'POST';
@@ -517,6 +520,8 @@ export default function StudentDatabase({ onBack, onNavigateToQRCards }) {
                       <option value="C">Section C</option>
                       <option value="D">Section D</option>
                       <option value="E">Section E</option>
+                      <option value="F">Section F</option>
+                      <option value="G">Section G</option>
                     </select>
                   </div>
                 ) : null}
