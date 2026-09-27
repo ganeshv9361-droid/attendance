@@ -24,7 +24,8 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     return minutes < 730 ? 'MORNING' : 'AFTERNOON';
   });
 
-  const [mode, setMode] = useState('qr'); // 'qr' or 'manual'
+  const [mode, setMode] = useState('manual'); // 'manual' (default for fast roll call) or 'qr'
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false); // Quick Paytm-style QR scan bottom sheet / modal
   const [students, setStudents] = useState([]);
   const [attendanceMap, setAttendanceMap] = useState({}); // { studentId: 'PRESENT' | 'ABSENT' }
   const [loading, setLoading] = useState(false);
@@ -42,6 +43,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
   // Student directory tab on side panel: 'present' | 'absent' | 'all'
   const [listTab, setListTab] = useState('present');
   const [searchQuery, setSearchQuery] = useState('');
+  const [manualSearchQuery, setManualSearchQuery] = useState('');
 
   // Add Student Modal State
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
@@ -248,7 +250,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     }
   };
 
-  // Start Live QR Scanner
+  // Start Live QR Scanner with native hardware BarcodeDetector acceleration
   const startScanner = async () => {
     setIsScanning(true);
     setScanFeedback(null);
@@ -263,7 +265,19 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
 
     setTimeout(async () => {
       try {
-        const scanner = new Html5Qrcode('qr-reader');
+        const el = document.getElementById('qr-reader');
+        if (!el) {
+          console.warn('qr-reader container not mounted in DOM yet');
+          return;
+        }
+
+        // Enable native hardware BarcodeDetector API for <30ms instant detection!
+        const scanner = new Html5Qrcode('qr-reader', {
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true
+          },
+          verbose: false
+        });
         html5QrCodeRef.current = scanner;
 
         const cameras = await Html5Qrcode.getCameras().catch(() => []);
@@ -277,9 +291,20 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
         await scanner.start(
           cameraConfig,
           {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0
+            fps: 25, // High 25fps capture for instantaneous recognition
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+              const edge = Math.max(220, Math.floor(minEdge * 0.82));
+              return { width: edge, height: edge };
+            },
+            aspectRatio: 1.0,
+            disableFlip: false,
+            videoConstraints: {
+              facingMode: { ideal: "environment" },
+              focusMode: { ideal: "continuous" },
+              width: { min: 640, ideal: 1280, max: 1920 },
+              height: { min: 480, ideal: 720, max: 1080 }
+            }
           },
           onQrScanSuccess,
           (errorMessage) => { }
@@ -304,6 +329,24 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       html5QrCodeRef.current = null;
     }
     setIsScanning(false);
+  };
+
+  const openQrScanner = () => {
+    setIsQrModalOpen(true);
+    startScanner();
+  };
+
+  const closeQrScanner = () => {
+    stopScanner();
+    setIsQrModalOpen(false);
+  };
+
+  const handlePaytmScanClick = () => {
+    if (isQrModalOpen) {
+      closeQrScanner();
+    } else {
+      openQrScanner();
+    }
   };
 
   // File / Image QR scan fallback
@@ -331,10 +374,16 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
 
   const onQrScanSuccess = async (decodedText) => {
     const now = Date.now();
+    // Debounce duplicate scans of identical student QR for 2.5s (different students scan instantly)
     if (lastScannedRef.current.code === decodedText && (now - lastScannedRef.current.time) < 2500) {
       return;
     }
     lastScannedRef.current = { code: decodedText, time: now };
+
+    // Tactile haptic vibration for mobile devices (like Paytm/PhonePe)
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate([70, 40, 70]); } catch (e) {}
+    }
 
     try {
       const data = await apiFetch('/api/attendance/mark', {
@@ -495,6 +544,18 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
   };
 
   const displayedStudents = getFilteredList();
+
+  // Filtered students for manual roll call search
+  const filteredManualStudents = students.filter(s => {
+    if (!manualSearchQuery.trim()) return true;
+    const q = manualSearchQuery.toLowerCase();
+    return (
+      s.name.toLowerCase().includes(q) ||
+      String(s.roll_no).includes(q) ||
+      (s.branch && s.branch.toLowerCase().includes(q)) ||
+      (s.section && s.section.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <div>
@@ -696,37 +757,37 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       {/* 3 Key Metric Cards */}
       <div className="kpi-cards-grid">
         <div className="card" style={{ padding: '14px', textAlign: 'center' }}>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
             Total Enrolled
           </div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+          <div className="kpi-num" style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>
             {totalStudents}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            {selectedClassId === 'ALL' ? 'Across All Classes' : `Class ${selectedClassId}`}
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+            {selectedClassId === 'ALL' ? 'All Classes' : `Class ${selectedClassId}`}
           </div>
         </div>
 
         <div className="card" style={{ padding: '14px', textAlign: 'center', borderBottom: '3px solid #10b981' }}>
-          <div style={{ fontSize: '0.78rem', color: '#10b981', fontWeight: 700, textTransform: 'uppercase' }}>
+          <div style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 700, textTransform: 'uppercase' }}>
             🟢 Present
           </div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#10b981' }}>
+          <div className="kpi-num" style={{ fontSize: '1.8rem', fontWeight: 800, color: '#10b981' }}>
             {presentCount}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
             {attendanceRate}% Present
           </div>
         </div>
 
         <div className="card" style={{ padding: '14px', textAlign: 'center', borderBottom: '3px solid #ef4444' }}>
-          <div style={{ fontSize: '0.78rem', color: '#ef4444', fontWeight: 700, textTransform: 'uppercase' }}>
+          <div style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 700, textTransform: 'uppercase' }}>
             🔴 Absent
           </div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#ef4444' }}>
+          <div className="kpi-num" style={{ fontSize: '1.8rem', fontWeight: 800, color: '#ef4444' }}>
             {absentCount}
           </div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
             {totalStudents > 0 ? (100 - attendanceRate).toFixed(1) : 0}% Absent
           </div>
         </div>
@@ -761,7 +822,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
               </div>
 
               {/* Viewfinder Window */}
-              <div style={{
+              <div className="scan-laser-box" style={{
                 position: 'relative',
                 width: '100%',
                 minHeight: '280px',
@@ -774,7 +835,17 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                 border: isScanning ? '2.5px solid #22c55e' : '2px dashed var(--border-color)',
                 marginBottom: '14px'
               }}>
-                <div id="qr-reader" style={{ width: '100%', height: '100%' }}></div>
+                {!isQrModalOpen && <div id="qr-reader" style={{ width: '100%', height: '100%' }}></div>}
+
+                {isScanning && (
+                  <>
+                    <div className="scan-laser-line" />
+                    <div className="scanner-corner scanner-corner-tl" />
+                    <div className="scanner-corner scanner-corner-tr" />
+                    <div className="scanner-corner scanner-corner-bl" />
+                    <div className="scanner-corner scanner-corner-br" />
+                  </>
+                )}
 
                 {!isScanning && (
                   <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
@@ -900,13 +971,13 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
           ) : (
             /* MANUAL ROLL CALL / CHECKLIST MODE */
             <div className="card" style={{ padding: '18px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
                 <div>
                   <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>
-                    Manual Roll Call: {selectedClassId}
+                    Manual Roll Call: {selectedClassId === 'ALL' ? 'All Classes' : selectedClassId}
                   </h3>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0 }}>
-                    Tap Present / Absent for each student, then save attendance below.
+                  <p style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                    1-Tap to mark Present / Absent • Auto-saves instantly
                   </p>
                 </div>
 
@@ -915,23 +986,66 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                     type="button"
                     onClick={() => markAll('PRESENT')}
                     className="btn-secondary"
-                    style={{ padding: '5px 10px', fontSize: '0.78rem', color: '#10b981' }}
+                    style={{ padding: '6px 12px', fontSize: '0.8rem', color: '#10b981', borderColor: '#10b981', fontWeight: 700 }}
                   >
-                    All Present
+                    ⚡ All Present
                   </button>
                   <button
                     type="button"
                     onClick={() => markAll('ABSENT')}
                     className="btn-secondary"
-                    style={{ padding: '5px 10px', fontSize: '0.78rem', color: '#ef4444' }}
+                    style={{ padding: '6px 12px', fontSize: '0.8rem', color: '#ef4444', borderColor: '#ef4444', fontWeight: 700 }}
                   >
-                    All Absent
+                    ❌ All Absent
                   </button>
                 </div>
               </div>
 
-              {/* Student Checklist Table */}
-              <div style={{ maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', marginBottom: '16px' }}>
+              {/* Fast Search Filter Bar */}
+              <div style={{ position: 'relative', marginBottom: '12px' }}>
+                <input
+                  type="text"
+                  placeholder="Quick search roll no, student name, branch..."
+                  value={manualSearchQuery}
+                  onChange={(e) => setManualSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px 8px 34px',
+                    fontSize: '0.84rem',
+                    borderRadius: '8px',
+                    border: '1.5px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-card-subtle)'
+                  }}
+                />
+                <Search size={16} style={{
+                  position: 'absolute',
+                  left: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)'
+                }} />
+                {manualSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setManualSearchQuery('')}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+
+              {/* DESKTOP TABLE VIEW */}
+              <div className="desktop-only" style={{ maxHeight: '420px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', marginBottom: '16px' }}>
                 <table style={{ margin: 0 }}>
                   <thead style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: 'var(--bg-card-subtle)' }}>
                     <tr>
@@ -942,28 +1056,28 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {students.length === 0 ? (
+                    {filteredManualStudents.length === 0 ? (
                       <tr>
                         <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          No students enrolled in this class yet.
+                          {students.length === 0 ? 'No students enrolled in this class yet.' : 'No students match your search.'}
                         </td>
                       </tr>
                     ) : (
-                      students.map(s => {
+                      filteredManualStudents.map(s => {
                         const isPresent = attendanceMap[s.id] === 'PRESENT';
                         return (
                           <tr key={s.id}>
                             <td style={{ fontWeight: 800, color: 'var(--accent-primary)' }}>#{s.roll_no}</td>
                             <td style={{ fontWeight: 600 }}>{s.name}</td>
                             <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                              {s.year || ''} {s.branch || ''} {s.section ? `(${s.section})` : ''}
+                              {s.branch || s.class_id} • {s.year || ''} {s.section ? `(${s.section})` : ''}
                             </td>
                             <td style={{ textAlign: 'right' }}>
                               <button
                                 type="button"
                                 onClick={() => toggleStudent(s.id)}
                                 style={{
-                                  padding: '5px 12px',
+                                  padding: '6px 14px',
                                   borderRadius: '9999px',
                                   fontSize: '0.78rem',
                                   fontWeight: 700,
@@ -973,7 +1087,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                                   color: '#ffffff',
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '4px'
+                                  gap: '5px'
                                 }}
                               >
                                 {isPresent ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
@@ -986,6 +1100,59 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              {/* MOBILE TOUCH-CARD VIEW (Finger-friendly for mobile screens) */}
+              <div className="mobile-only" style={{ maxHeight: '460px', overflowY: 'auto', marginBottom: '14px', paddingRight: '2px' }}>
+                {filteredManualStudents.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    {students.length === 0 ? 'No students enrolled in this class yet.' : 'No students match your search.'}
+                  </div>
+                ) : (
+                  filteredManualStudents.map(s => {
+                    const isPresent = attendanceMap[s.id] === 'PRESENT';
+                    return (
+                      <div
+                        key={s.id}
+                        className={`student-touch-card ${isPresent ? 'is-present' : 'is-absent'}`}
+                      >
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                            <span style={{
+                              fontWeight: 800,
+                              fontSize: '0.82rem',
+                              color: 'var(--accent-primary)',
+                              backgroundColor: 'var(--accent-light)',
+                              padding: '2px 7px',
+                              borderRadius: '6px'
+                            }}>
+                              #{s.roll_no}
+                            </span>
+                            <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {s.name}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                            {s.branch || s.class_id} • {s.year || '1st Year'} {s.section ? `• Sec ${s.section}` : ''}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="touch-toggle-btn"
+                          onClick={() => toggleStudent(s.id)}
+                          style={{
+                            backgroundColor: isPresent ? '#10b981' : '#ef4444',
+                            color: '#ffffff'
+                          }}
+                        >
+                          {isPresent ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+                          <span>{isPresent ? 'PRESENT' : 'ABSENT'}</span>
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
               </div>
 
               {/* Big Save Button */}
@@ -1408,6 +1575,206 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
           </div>
         </div>
       )}
+
+      {/* QUICK PAYTM-STYLE QR SCANNER MODAL SHEET */}
+      {isQrModalOpen && (
+        <div className="scanner-modal-overlay">
+          <div className="scanner-modal-sheet">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  backgroundColor: 'rgba(37, 99, 235, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--accent-primary)'
+                }}>
+                  <QrCode size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>
+                    Fast QR Scanner
+                  </h3>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    ⚡ Instant hardware detection • Auto-routes student
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeQrScanner}
+                style={{
+                  background: 'var(--bg-card-subtle)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer'
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Camera Viewfinder */}
+            <div className="scan-laser-box" style={{
+              position: 'relative',
+              width: '100%',
+              minHeight: '260px',
+              backgroundColor: '#0f172a',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: isScanning ? '2.5px solid #22c55e' : '2px dashed var(--border-color)',
+              marginBottom: '12px'
+            }}>
+              <div id="qr-reader" style={{ width: '100%', height: '100%' }}></div>
+
+              {isScanning && (
+                <>
+                  <div className="scan-laser-line" />
+                  <div className="scanner-corner scanner-corner-tl" />
+                  <div className="scanner-corner scanner-corner-tr" />
+                  <div className="scanner-corner scanner-corner-bl" />
+                  <div className="scanner-corner scanner-corner-br" />
+                </>
+              )}
+            </div>
+
+            {/* Instant Scan Feedback Alert */}
+            {scanFeedback && (
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '0.84rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '12px',
+                backgroundColor: scanFeedback.type === 'success' ? '#dcfce7' : (scanFeedback.type === 'warning' ? '#fef3c7' : '#fee2e2'),
+                color: scanFeedback.type === 'success' ? '#166534' : (scanFeedback.type === 'warning' ? '#92400e' : '#991b1b'),
+                border: `1px solid ${scanFeedback.type === 'success' ? '#86efac' : (scanFeedback.type === 'warning' ? '#fde68a' : '#fca5a5')}`
+              }}>
+                {scanFeedback.type === 'success' && <CheckCircle2 size={18} />}
+                {scanFeedback.type === 'warning' && <AlertCircle size={18} />}
+                {scanFeedback.type === 'error' && <XCircle size={18} />}
+                <span>{scanFeedback.text}</span>
+              </div>
+            )}
+
+            {/* Quick Actions */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                onChange={handleFileScan}
+                style={{ display: 'none' }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="btn-secondary"
+                style={{ flex: 1, padding: '8px', fontSize: '0.78rem' }}
+              >
+                <Upload size={14} />
+                <span>Upload Image</span>
+              </button>
+              <button
+                type="button"
+                onClick={closeQrScanner}
+                className="btn-primary"
+                style={{ flex: 1, padding: '8px', fontSize: '0.78rem' }}
+              >
+                <Check size={14} />
+                <span>Done Scanning</span>
+              </button>
+            </div>
+
+            {/* Recent Check-ins */}
+            {recentScans.length > 0 && (
+              <div>
+                <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>
+                  Just Checked In
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '120px', overflowY: 'auto' }}>
+                  {recentScans.slice(0, 3).map((scan, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '6px 10px',
+                        backgroundColor: 'var(--bg-card-subtle)',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem'
+                      }}
+                    >
+                      <span style={{ fontWeight: 700, color: '#10b981' }}>
+                        #{scan.student.rollNo} {scan.student.name}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                        {scan.time}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* PAYTM-STYLE MOBILE BOTTOM ACTION DOCK */}
+      <div className="mobile-bottom-dock">
+        {/* Left: Roll Call */}
+        <button
+          type="button"
+          className={`dock-action-btn ${mode === 'manual' && !isQrModalOpen ? 'active' : ''}`}
+          onClick={() => {
+            closeQrScanner();
+            setMode('manual');
+          }}
+        >
+          <ClipboardList size={22} />
+          <span>Roll Call</span>
+        </button>
+
+        {/* Center: Paytm-Style Elevated Scan Button */}
+        <button
+          type="button"
+          className="paytm-qr-center-btn"
+          onClick={handlePaytmScanClick}
+          title="Scan Student QR Pass"
+        >
+          <div className="paytm-qr-pulse" />
+          <QrCode size={28} />
+          <span style={{ fontSize: '0.62rem', fontWeight: 800, marginTop: '2px', letterSpacing: '0.04em' }}>SCAN</span>
+        </button>
+
+        {/* Right: Excel Download */}
+        <button
+          type="button"
+          className="dock-action-btn"
+          onClick={() => handleDownloadExcel()}
+          title="Download Daily Attendance Excel"
+        >
+          <FileSpreadsheet size={22} />
+          <span>Excel</span>
+        </button>
+      </div>
     </div>
   );
 }

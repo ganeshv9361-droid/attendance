@@ -182,6 +182,60 @@ export async function generateDailyExcelWorkbook(date, classId = null) {
     totalRow.getCell(col).border = { top: { style: 'thin' }, bottom: { style: 'double' } };
   }
 
+  // --- College-Wide Percentage Summary Cards ---
+  rowIdx += 2; // Blank row
+
+  overviewSheet.mergeCells(`A${rowIdx}:J${rowIdx}`);
+  const ovSumHead = overviewSheet.getCell(`A${rowIdx}`);
+  ovSumHead.value = 'COLLEGE-WIDE DAILY ATTENDANCE PERCENTAGE BENCHMARKS';
+  ovSumHead.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  ovSumHead.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+  ovSumHead.alignment = { horizontal: 'center', vertical: 'middle' };
+  overviewSheet.getRow(rowIdx).height = 26;
+  rowIdx++;
+
+  const amPct = totalCollegeStudents > 0 ? ((totalMorningPresent / totalCollegeStudents) * 100).toFixed(1) : '0.0';
+  const amAbsPct = totalCollegeStudents > 0 ? ((totalMorningAbsent / totalCollegeStudents) * 100).toFixed(1) : '0.0';
+  const pmPct = totalCollegeStudents > 0 ? ((totalAfternoonPresent / totalCollegeStudents) * 100).toFixed(1) : '0.0';
+  const pmAbsPct = totalCollegeStudents > 0 ? ((totalAfternoonAbsent / totalCollegeStudents) * 100).toFixed(1) : '0.0';
+
+  overviewSheet.mergeCells(`A${rowIdx}:C${rowIdx}`);
+  overviewSheet.getCell(`A${rowIdx}`).value = 'Morning Lectures (AM):';
+  overviewSheet.getCell(`A${rowIdx}`).font = { bold: true };
+  overviewSheet.getCell(`A${rowIdx}`).alignment = { horizontal: 'right', vertical: 'middle' };
+
+  overviewSheet.mergeCells(`D${rowIdx}:E${rowIdx}`);
+  overviewSheet.getCell(`D${rowIdx}`).value = `PRESENT: ${amPct}% (${totalMorningPresent} students)`;
+  overviewSheet.getCell(`D${rowIdx}`).font = { bold: true, color: { argb: 'FF166534' } };
+  overviewSheet.getCell(`D${rowIdx}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+  overviewSheet.getCell(`D${rowIdx}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
+  overviewSheet.mergeCells(`F${rowIdx}:G${rowIdx}`);
+  overviewSheet.getCell(`F${rowIdx}`).value = `ABSENT: ${amAbsPct}% (${totalMorningAbsent} students)`;
+  overviewSheet.getCell(`F${rowIdx}`).font = { bold: true, color: { argb: 'FF991B1B' } };
+  overviewSheet.getCell(`F${rowIdx}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+  overviewSheet.getCell(`F${rowIdx}`).alignment = { horizontal: 'center', vertical: 'middle' };
+  overviewSheet.getRow(rowIdx).height = 24;
+  rowIdx++;
+
+  overviewSheet.mergeCells(`A${rowIdx}:C${rowIdx}`);
+  overviewSheet.getCell(`A${rowIdx}`).value = 'Afternoon Labs (PM):';
+  overviewSheet.getCell(`A${rowIdx}`).font = { bold: true };
+  overviewSheet.getCell(`A${rowIdx}`).alignment = { horizontal: 'right', vertical: 'middle' };
+
+  overviewSheet.mergeCells(`D${rowIdx}:E${rowIdx}`);
+  overviewSheet.getCell(`D${rowIdx}`).value = `PRESENT: ${pmPct}% (${totalAfternoonPresent} students)`;
+  overviewSheet.getCell(`D${rowIdx}`).font = { bold: true, color: { argb: 'FF166534' } };
+  overviewSheet.getCell(`D${rowIdx}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+  overviewSheet.getCell(`D${rowIdx}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
+  overviewSheet.mergeCells(`F${rowIdx}:G${rowIdx}`);
+  overviewSheet.getCell(`F${rowIdx}`).value = `ABSENT: ${pmAbsPct}% (${totalAfternoonAbsent} students)`;
+  overviewSheet.getCell(`F${rowIdx}`).font = { bold: true, color: { argb: 'FF991B1B' } };
+  overviewSheet.getCell(`F${rowIdx}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+  overviewSheet.getCell(`F${rowIdx}`).alignment = { horizontal: 'center', vertical: 'middle' };
+  overviewSheet.getRow(rowIdx).height = 24;
+
   overviewSheet.columns = [
     { width: 16 }, { width: 32 }, { width: 26 }, { width: 16 },
     { width: 18 }, { width: 18 }, { width: 14 },
@@ -210,38 +264,48 @@ export async function generateDailyExcelWorkbook(date, classId = null) {
     deptSheet.getRow(2).height = 18;
 
     const deptHeaders = [
-      'Roll No', 'Student ID', 'Student Name', 'Year', 'Branch', 'Section',
+      'Roll No', 'Student Name', 'Department / Branch', 'Year', 'Section',
       'Morning Status', 'Morning Check-in',
       'Afternoon Status', 'Afternoon Check-in',
       'Phone Number', 'Common Mail ID'
     ];
     deptSheet.getRow(4).values = deptHeaders;
     const dpHeadRow = deptSheet.getRow(4);
-    dpHeadRow.height = 26;
-    dpHeadRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    dpHeadRow.height = 28;
+    dpHeadRow.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
     dpHeadRow.alignment = { horizontal: 'center', vertical: 'middle' };
     for (let col = 1; col <= deptHeaders.length; col++) {
-      dpHeadRow.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+      dpHeadRow.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
       dpHeadRow.getCell(col).border = { top: { style: 'thin' }, bottom: { style: 'medium' } };
     }
 
     let dpRowIdx = 5;
+    let deptAmPresent = 0;
+    let deptAmAbsent = 0;
+    let deptPmPresent = 0;
+    let deptPmAbsent = 0;
+
     for (const s of deptStudents) {
       const am = attMap[`${s.id}_MORNING`];
       const pm = attMap[`${s.id}_AFTERNOON`];
 
       const amStatus = am ? am.status : 'NOT MARKED';
-      const amMethod = am ? am.method : '-';
+      const amMethod = am ? (am.method || 'MANUAL') : '-';
       const pmStatus = pm ? pm.status : 'NOT MARKED';
-      const pmMethod = pm ? pm.method : '-';
+      const pmMethod = pm ? (pm.method || 'MANUAL') : '-';
+
+      if (amStatus === 'PRESENT') deptAmPresent++;
+      else if (amStatus === 'ABSENT') deptAmAbsent++;
+
+      if (pmStatus === 'PRESENT') deptPmPresent++;
+      else if (pmStatus === 'ABSENT') deptPmAbsent++;
 
       const row = deptSheet.getRow(dpRowIdx);
       row.values = [
         s.roll_no,
-        s.id,
         s.name,
+        s.branch || c.id || '-',
         s.year || '-',
-        s.branch || '-',
         s.section || '-',
         amStatus,
         amMethod,
@@ -250,32 +314,129 @@ export async function generateDailyExcelWorkbook(date, classId = null) {
         s.phone || s.parent_phone || '-',
         s.email || '-'
       ];
-      row.height = 20;
+      row.height = 22;
       row.alignment = { vertical: 'middle', horizontal: 'center' };
-      row.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
-      row.getCell(12).alignment = { vertical: 'middle', horizontal: 'left' };
+      row.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' }; // Student Name
+      row.getCell(11).alignment = { vertical: 'middle', horizontal: 'left' }; // Mail
+
+      // Zebra striping
+      if (dpRowIdx % 2 === 0) {
+        for (let col = 1; col <= deptHeaders.length; col++) {
+          row.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        }
+      }
 
       if (amStatus === 'PRESENT') {
-        row.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
-        row.getCell(7).font = { color: { argb: 'FF166534' }, bold: true };
+        row.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+        row.getCell(6).font = { color: { argb: 'FF166534' }, bold: true };
       } else if (amStatus === 'ABSENT') {
-        row.getCell(7).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
-        row.getCell(7).font = { color: { argb: 'FF991B1B' }, bold: true };
+        row.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+        row.getCell(6).font = { color: { argb: 'FF991B1B' }, bold: true };
       }
 
       if (pmStatus === 'PRESENT') {
-        row.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
-        row.getCell(9).font = { color: { argb: 'FF166534' }, bold: true };
+        row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+        row.getCell(8).font = { color: { argb: 'FF166534' }, bold: true };
       } else if (pmStatus === 'ABSENT') {
-        row.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
-        row.getCell(9).font = { color: { argb: 'FF991B1B' }, bold: true };
+        row.getCell(8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+        row.getCell(8).font = { color: { argb: 'FF991B1B' }, bold: true };
       }
 
       dpRowIdx++;
     }
 
+    // --- BOTTOM PERCENTAGE & STATISTICAL SUMMARY ---
+    dpRowIdx++; // Blank spacing row
+
+    const totalInDept = deptStudents.length;
+    const amPresRate = totalInDept > 0 ? ((deptAmPresent / totalInDept) * 100).toFixed(1) : '0.0';
+    const amAbsRate = totalInDept > 0 ? ((deptAmAbsent / totalInDept) * 100).toFixed(1) : '0.0';
+    const pmPresRate = totalInDept > 0 ? ((deptPmPresent / totalInDept) * 100).toFixed(1) : '0.0';
+    const pmAbsRate = totalInDept > 0 ? ((deptPmAbsent / totalInDept) * 100).toFixed(1) : '0.0';
+
+    // Summary Header Banner
+    deptSheet.mergeCells(`A${dpRowIdx}:K${dpRowIdx}`);
+    const sumHead = deptSheet.getCell(`A${dpRowIdx}`);
+    sumHead.value = `DEPARTMENT ATTENDANCE PERCENTAGE & STATISTICAL SUMMARY`;
+    sumHead.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    sumHead.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    sumHead.alignment = { horizontal: 'center', vertical: 'middle' };
+    deptSheet.getRow(dpRowIdx).height = 26;
+    dpRowIdx++;
+
+    // Total Enrolled Row
+    deptSheet.mergeCells(`A${dpRowIdx}:C${dpRowIdx}`);
+    const totLabel = deptSheet.getCell(`A${dpRowIdx}`);
+    totLabel.value = 'Total Students Enrolled:';
+    totLabel.font = { bold: true };
+    totLabel.alignment = { horizontal: 'right', vertical: 'middle' };
+    deptSheet.getCell(`D${dpRowIdx}`).value = totalInDept;
+    deptSheet.getCell(`D${dpRowIdx}`).font = { bold: true, size: 11 };
+    deptSheet.getCell(`D${dpRowIdx}`).alignment = { horizontal: 'center', vertical: 'middle' };
+    deptSheet.getRow(dpRowIdx).height = 24;
+    dpRowIdx++;
+
+    // Morning Session Summary Row
+    deptSheet.mergeCells(`A${dpRowIdx}:C${dpRowIdx}`);
+    const amLabel = deptSheet.getCell(`A${dpRowIdx}`);
+    amLabel.value = 'Morning Lectures (AM):';
+    amLabel.font = { bold: true };
+    amLabel.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    deptSheet.getCell(`D${dpRowIdx}`).value = `Present: ${deptAmPresent}`;
+    deptSheet.getCell(`D${dpRowIdx}`).font = { bold: true };
+
+    deptSheet.mergeCells(`E${dpRowIdx}:F${dpRowIdx}`);
+    const amPresCell = deptSheet.getCell(`E${dpRowIdx}`);
+    amPresCell.value = `PRESENT: ${amPresRate}%`;
+    amPresCell.font = { bold: true, size: 11, color: { argb: 'FF166534' } };
+    amPresCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+    amPresCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    deptSheet.getCell(`G${dpRowIdx}`).value = `Absent: ${deptAmAbsent}`;
+    deptSheet.getCell(`G${dpRowIdx}`).font = { bold: true };
+
+    deptSheet.mergeCells(`H${dpRowIdx}:I${dpRowIdx}`);
+    const amAbsCell = deptSheet.getCell(`H${dpRowIdx}`);
+    amAbsCell.value = `ABSENT: ${amAbsRate}%`;
+    amAbsCell.font = { bold: true, size: 11, color: { argb: 'FF991B1B' } };
+    amAbsCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+    amAbsCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    deptSheet.getRow(dpRowIdx).height = 26;
+    dpRowIdx++;
+
+    // Afternoon Session Summary Row
+    deptSheet.mergeCells(`A${dpRowIdx}:C${dpRowIdx}`);
+    const pmLabel = deptSheet.getCell(`A${dpRowIdx}`);
+    pmLabel.value = 'Afternoon Labs (PM):';
+    pmLabel.font = { bold: true };
+    pmLabel.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    deptSheet.getCell(`D${dpRowIdx}`).value = `Present: ${deptPmPresent}`;
+    deptSheet.getCell(`D${dpRowIdx}`).font = { bold: true };
+
+    deptSheet.mergeCells(`E${dpRowIdx}:F${dpRowIdx}`);
+    const pmPresCell = deptSheet.getCell(`E${dpRowIdx}`);
+    pmPresCell.value = `PRESENT: ${pmPresRate}%`;
+    pmPresCell.font = { bold: true, size: 11, color: { argb: 'FF166534' } };
+    pmPresCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+    pmPresCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    deptSheet.getCell(`G${dpRowIdx}`).value = `Absent: ${deptPmAbsent}`;
+    deptSheet.getCell(`G${dpRowIdx}`).font = { bold: true };
+
+    deptSheet.mergeCells(`H${dpRowIdx}:I${dpRowIdx}`);
+    const pmAbsCell = deptSheet.getCell(`H${dpRowIdx}`);
+    pmAbsCell.value = `ABSENT: ${pmAbsRate}%`;
+    pmAbsCell.font = { bold: true, size: 11, color: { argb: 'FF991B1B' } };
+    pmAbsCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+    pmAbsCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    deptSheet.getRow(dpRowIdx).height = 26;
+
     deptSheet.columns = [
-      { width: 10 }, { width: 16 }, { width: 24 }, { width: 12 }, { width: 14 }, { width: 10 },
+      { width: 12 }, { width: 24 }, { width: 20 }, { width: 12 }, { width: 10 },
       { width: 18 }, { width: 16 },
       { width: 18 }, { width: 16 },
       { width: 18 }, { width: 26 }

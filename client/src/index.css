@@ -615,7 +615,7 @@ tbody tr:hover {
 
 @media (max-width: 640px) {
   .main-content {
-    padding: 12px 10px 50px !important;
+    padding: 12px 10px 96px !important;
   }
   .navbar {
     padding: 10px 12px !important;
@@ -631,13 +631,21 @@ tbody tr:hover {
     font-size: 0.75rem !important;
   }
   .kpi-cards-grid {
-    grid-template-columns: 1fr !important;
-    gap: 8px !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+    margin-bottom: 12px !important;
+  }
+  .kpi-cards-grid .card {
+    padding: 8px 4px !important;
+  }
+  .kpi-cards-grid .card .kpi-num {
+    font-size: 1.35rem !important;
   }
   .station-header {
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: 12px !important;
+    gap: 10px !important;
+    margin-bottom: 12px !important;
   }
   .station-header > div {
     width: 100% !important;
@@ -668,12 +676,252 @@ tbody tr:hover {
     display: none !important;
   }
   .card {
-    padding: 14px !important;
+    padding: 12px !important;
+    margin-bottom: 12px !important;
   }
   .modal-content {
     padding: 16px !important;
     width: 95% !important;
   }
+}
+
+.mobile-only {
+  display: none !important;
+}
+.desktop-only {
+  display: block !important;
+}
+@media (max-width: 768px) {
+  .mobile-only {
+    display: block !important;
+  }
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-flex {
+    display: flex !important;
+  }
+}
+
+/* Scanner Bottom Sheet / Modal Overlay */
+.scanner-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  animation: fadeIn 0.2s ease-out;
+}
+@media (min-width: 769px) {
+  .scanner-modal-overlay {
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+}
+.scanner-modal-sheet {
+  background: var(--bg-card);
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  border: 1px solid var(--border-color);
+  padding: 20px 16px 36px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+  max-height: 92vh;
+  overflow-y: auto;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (min-width: 769px) {
+  .scanner-modal-sheet {
+    border-radius: 20px;
+    padding: 24px;
+  }
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Paytm-Style Mobile Bottom Action Dock */
+.mobile-bottom-dock {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Extra bottom padding so content isn't covered by bottom dock */
+  .main-content {
+    padding-bottom: 95px !important;
+  }
+
+  .mobile-bottom-dock {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 72px;
+    background: var(--bg-card);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border-color);
+    align-items: center;
+    justify-content: space-around;
+    z-index: 1000;
+    padding: 0 16px;
+    box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.12);
+  }
+
+  .dock-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 12px;
+    transition: all 0.15s ease;
+    flex: 1;
+    max-width: 110px;
+  }
+
+  .dock-action-btn.active {
+    color: var(--accent-primary);
+  }
+
+  /* Paytm-Style Elevated Center QR Scan Button */
+  .paytm-qr-center-btn {
+    width: 66px;
+    height: 66px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1d4ed8, #2563eb, #3b82f6);
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 4px solid var(--bg-primary);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5), 0 2px 6px rgba(0, 0, 0, 0.2);
+    transform: translateY(-22px);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    z-index: 1001;
+  }
+
+  .paytm-qr-center-btn:active {
+    transform: translateY(-18px) scale(0.95);
+    box-shadow: 0 3px 12px rgba(37, 99, 235, 0.6);
+  }
+
+  .paytm-qr-pulse {
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 2px solid rgba(59, 130, 246, 0.5);
+    animation: paytmPulse 2s infinite ease-out;
+    pointer-events: none;
+  }
+
+  @keyframes paytmPulse {
+    0% { transform: scale(0.95); opacity: 1; }
+    100% { transform: scale(1.35); opacity: 0; }
+  }
+}
+
+/* Laser Scanner Animation for Camera Viewfinder */
+.scan-laser-box {
+  position: relative;
+  overflow: hidden;
+}
+
+.scan-laser-line {
+  position: absolute;
+  top: 0;
+  left: 5%;
+  right: 5%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #22c55e, #4ade80, #22c55e, transparent);
+  box-shadow: 0 0 15px #22c55e, 0 0 25px #4ade80;
+  border-radius: 9999px;
+  animation: laserScan 2s infinite ease-in-out alternate;
+  z-index: 10;
+  pointer-events: none;
+}
+
+@keyframes laserScan {
+  0% { top: 8%; opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { top: 92%; opacity: 0.8; }
+}
+
+/* Scanner Corner Brackets */
+.scanner-corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-color: #22c55e;
+  border-style: solid;
+  pointer-events: none;
+  z-index: 11;
+}
+.scanner-corner-tl { top: 14px; left: 14px; border-width: 3.5px 0 0 3.5px; border-top-left-radius: 8px; }
+.scanner-corner-tr { top: 14px; right: 14px; border-width: 3.5px 3.5px 0 0; border-top-right-radius: 8px; }
+.scanner-corner-bl { bottom: 14px; left: 14px; border-width: 0 0 3.5px 3.5px; border-bottom-left-radius: 8px; }
+.scanner-corner-br { bottom: 14px; right: 14px; border-width: 0 3.5px 3.5px 0; border-bottom-right-radius: 8px; }
+
+/* Student Manual Attendance Card for Mobile */
+.student-touch-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  margin-bottom: 8px;
+  transition: all 0.15s ease;
+}
+
+.student-touch-card:active {
+  transform: scale(0.985);
+}
+
+.student-touch-card.is-present {
+  border-left: 5px solid #10b981;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.06), var(--bg-card) 40%);
+}
+
+.student-touch-card.is-absent {
+  border-left: 5px solid #ef4444;
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.06), var(--bg-card) 40%);
+}
+
+.touch-toggle-btn {
+  min-width: 90px;
+  height: 42px;
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 
 /* Printable ID Badges Styling */
