@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  CheckCircle2, XCircle, QrCode, ClipboardList, Camera, CameraOff, 
+import {
+  CheckCircle2, XCircle, QrCode, ClipboardList, Camera, CameraOff,
   Phone, Users, Clock, AlertCircle, Sparkles, RefreshCw, Volume2, Calendar,
   Plus, X, Check, Search, Upload, UserCheck, ChevronDown, Download, FileSpreadsheet,
   CheckCheck
@@ -114,7 +114,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     try {
       const isAll = !selectedClassId || selectedClassId === 'ALL';
       const stuUrl = isAll ? '/api/students' : `/api/students?classId=${encodeURIComponent(selectedClassId)}`;
-      const attUrl = isAll 
+      const attUrl = isAll
         ? `/api/attendance?date=${date}&session=${session}`
         : `/api/attendance?classId=${encodeURIComponent(selectedClassId)}&date=${date}&session=${session}`;
 
@@ -257,7 +257,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       try {
         await html5QrCodeRef.current.stop();
         html5QrCodeRef.current.clear();
-      } catch (e) {}
+      } catch (e) { }
       html5QrCodeRef.current = null;
     }
 
@@ -282,7 +282,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
             aspectRatio: 1.0
           },
           onQrScanSuccess,
-          (errorMessage) => {}
+          (errorMessage) => { }
         );
       } catch (err) {
         console.error('Failed to start camera:', err);
@@ -300,7 +300,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       try {
         await html5QrCodeRef.current.stop();
         html5QrCodeRef.current.clear();
-      } catch (e) {}
+      } catch (e) { }
       html5QrCodeRef.current = null;
     }
     setIsScanning(false);
@@ -354,10 +354,10 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       }));
 
       setRecentScans(prev => [
-        { 
-          student: data.student, 
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), 
-          alreadyMarked: data.alreadyMarked 
+        {
+          student: data.student,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          alreadyMarked: data.alreadyMarked
         },
         ...prev.slice(0, 5)
       ]);
@@ -487,8 +487,8 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
 
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
-    return list.filter(s => 
-      s.name.toLowerCase().includes(q) || 
+    return list.filter(s =>
+      s.name.toLowerCase().includes(q) ||
       String(s.roll_no).includes(q) ||
       (s.phone && s.phone.includes(q))
     );
@@ -595,7 +595,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                 cursor: 'pointer'
               }}
             >
-              🌅 Morning Lecture
+              🌅 Morning
             </button>
             <button
               type="button"
@@ -612,7 +612,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
                 cursor: 'pointer'
               }}
             >
-              🌆 Afternoon Lab
+              🌆 Afternoon
             </button>
           </div>
 
