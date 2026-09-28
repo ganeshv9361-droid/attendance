@@ -14,6 +14,7 @@ const BRANCH_OPTIONS = ['CSE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'IT', 'AI&DS', 'AI
 
 export default function TeacherDashboard({ user, onBack, onLogout }) {
   const [classes, setClasses] = useState([]);
+  const [classStudentCounts, setClassStudentCounts] = useState({});
   const [selectedClassId, setSelectedClassId] = useState(user.assignedClassId || '');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
 
@@ -103,8 +104,25 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
     try {
       const data = await apiFetch('/api/classes');
       setClasses(data);
-      if (!selectedClassId) {
-        setSelectedClassId('ALL');
+
+      // Fetch student counts per class for the dropdown display
+      const counts = {};
+      await Promise.all(
+        data.map(async (c) => {
+          try {
+            const stuData = await apiFetch(`/api/students?classId=${encodeURIComponent(c.id)}`);
+            counts[c.id] = Array.isArray(stuData) ? stuData.length : 0;
+          } catch {
+            counts[c.id] = 0;
+          }
+        })
+      );
+      setClassStudentCounts(counts);
+
+      // Auto-select: prefer assigned class, else first class with students, else ALL
+      if (!selectedClassId || selectedClassId === '') {
+        const firstWithStudents = data.find(c => counts[c.id] > 0);
+        setSelectedClassId(firstWithStudents ? firstWithStudents.id : (data[0]?.id || 'ALL'));
       }
     } catch (err) {
       console.error('Failed to load classes:', err);
@@ -562,42 +580,58 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
       {/* Top Header & Context Controls */}
       <div className="station-header">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 className="card-title" style={{ fontSize: '1.5rem' }}>
-              <span>Faculty Attendance Station</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <h1 className="card-title" style={{ fontSize: '1.25rem', margin: 0 }}>
+              Attendance Station
             </h1>
             <span className="user-role-badge badge-teacher">
               {user.fullName || 'Faculty'}
             </span>
           </div>
-          <p className="card-subtitle">
+          <p className="card-subtitle" style={{ marginTop: '4px', fontSize: '0.8rem' }}>
             {selectedClassId === 'ALL'
-              ? '✨ Universal Auto-Detect Mode • Scan any student QR to instantly mark attendance in their class'
-              : `Roll call & QR check-in for ${selectedClassId} • Scanned QRs automatically routed`}
+              ? '✨ All Classes • Scan any student QR to auto-detect & mark attendance'
+              : (() => {
+                  const cls = classes.find(c => c.id === selectedClassId);
+                  const count = classStudentCounts[selectedClassId] ?? 0;
+                  const info = cls ? [cls.name, cls.year, cls.branch, cls.section ? `Sec-${cls.section}` : null].filter(Boolean).join(' • ') : selectedClassId;
+                  return `📋 ${info} — ${count} students enrolled`;
+                })()}
           </p>
         </div>
 
         {/* Action Controls: Class Selector, Excel Download */}
         <div className="action-controls-wrap">
           {/* Class Chooser Dropdown */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
             <select
               value={selectedClassId}
               onChange={(e) => setSelectedClassId(e.target.value)}
               style={{
                 fontWeight: 700,
-                fontSize: '0.9rem',
+                fontSize: '0.88rem',
                 padding: '8px 12px',
                 borderColor: 'var(--accent-primary)',
-                backgroundColor: 'var(--bg-card)'
+                backgroundColor: 'var(--bg-card)',
+                maxWidth: '100%',
+                minWidth: '200px'
               }}
             >
               <option value="ALL">✨ All Classes (Auto-Detect QR)</option>
-              {classes.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.id} - {c.name}
-                </option>
-              ))}
+              {classes.map(c => {
+                const count = classStudentCounts[c.id] ?? 0;
+                const label = [
+                  c.name || c.id,
+                  c.year && c.year !== c.name ? c.year : null,
+                  c.branch && c.branch !== c.name ? c.branch : null,
+                  c.section ? `Sec-${c.section}` : null
+                ].filter(Boolean).join(' • ');
+                return (
+                  <option key={c.id} value={c.id}>
+                    {label} ({count} students)
+                  </option>
+                );
+              })}
             </select>
             <button
               onClick={() => setIsAddClassModalOpen(true)}
@@ -606,7 +640,7 @@ export default function TeacherDashboard({ user, onBack, onLogout }) {
               title="Add New Department / Class"
             >
               <Plus size={16} />
-              <span className="hide-mobile">Class</span>
+              <span className="hide-mobile">Add Class</span>
             </button>
           </div>
 

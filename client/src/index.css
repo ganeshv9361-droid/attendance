@@ -187,7 +187,7 @@ button {
 .navbar {
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  padding: 14px 24px;
+  padding: 10px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -195,6 +195,8 @@ button {
   top: 0;
   z-index: 50;
   box-shadow: var(--shadow-sm);
+  min-height: 52px;
+  overflow: hidden;
 }
 
 .brand {
@@ -218,10 +220,11 @@ button {
 }
 
 .brand-title {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
 .brand-subtitle {
@@ -233,7 +236,8 @@ button {
 .nav-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 /* User Badge in Nav */
@@ -628,17 +632,36 @@ tbody tr:hover {
     padding: 12px 10px 96px !important;
   }
   .navbar {
-    padding: 10px 12px !important;
+    padding: 8px 10px !important;
+    min-height: 48px !important;
   }
   .brand-subtitle {
     display: none !important;
   }
   .brand-title {
-    font-size: 1.05rem !important;
+    font-size: 0.9rem !important;
+  }
+  .brand-title span:first-child {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
   }
   .user-pill {
-    padding: 4px 8px !important;
-    font-size: 0.75rem !important;
+    padding: 3px 6px !important;
+    gap: 4px !important;
+    font-size: 0.72rem !important;
+  }
+  .user-pill .user-role-badge {
+    display: none !important;
+  }
+  .nav-actions {
+    gap: 4px !important;
+  }
+  .brand > img {
+    width: 28px !important;
+    height: 28px !important;
   }
   .kpi-cards-grid {
     grid-template-columns: repeat(3, 1fr) !important;

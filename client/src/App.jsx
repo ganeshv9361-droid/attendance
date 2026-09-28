@@ -38,18 +38,18 @@ export default function App() {
     <div className="app-container">
       {/* Universal Top Navigation */}
       <header className="navbar no-print">
-        <div className="brand" onClick={() => setAdminView('dashboard')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="brand" onClick={() => setAdminView('dashboard')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
           <img 
             src="/app-icon.png" 
             alt="EduTrack Logo" 
-            style={{ width: '36px', height: '36px', borderRadius: '8px', boxShadow: 'var(--shadow-sm)' }} 
+            style={{ width: '32px', height: '32px', borderRadius: '8px', boxShadow: 'var(--shadow-sm)', flexShrink: 0 }} 
           />
-          <div>
-            <div className="brand-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>EduTrack Campus</span>
-              <span style={{ fontSize: '0.65rem', background: 'var(--accent-primary)', color: '#fff', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>v1.0</span>
+          <div style={{ minWidth: 0 }}>
+            <div className="brand-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>EduTrack</span>
+              <span className="hide-mobile" style={{ fontSize: '0.65rem', background: 'var(--accent-primary)', color: '#fff', padding: '2px 5px', borderRadius: '4px', fontWeight: 800, flexShrink: 0 }}>v1.0</span>
             </div>
-            <div className="brand-subtitle">College Attendance & Department Management</div>
+            <div className="brand-subtitle">Attendance &amp; Management</div>
           </div>
         </div>
 
@@ -57,11 +57,11 @@ export default function App() {
           {/* User Info Pill */}
           <div className="user-pill">
             {user.role === 'admin' ? (
-              <ShieldCheck size={16} style={{ color: '#8b5cf6' }} />
+              <ShieldCheck size={14} style={{ color: '#8b5cf6', flexShrink: 0 }} />
             ) : (
-              <UserCheck size={16} style={{ color: '#0284c7' }} />
+              <UserCheck size={14} style={{ color: '#0284c7', flexShrink: 0 }} />
             )}
-            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user.fullName || user.username}
             </span>
             <span className={`user-role-badge ${user.role === 'admin' ? 'badge-admin' : 'badge-teacher'}`}>
@@ -69,16 +69,16 @@ export default function App() {
             </span>
           </div>
 
-          {/* Android APK Download Button */}
+          {/* Android APK Download Button - hide on small mobile */}
           <a
             href="/EduTrack-Attendance.apk"
             download="EduTrack-Attendance.apk"
-            className="btn-secondary"
-            style={{ padding: '8px 12px', fontSize: '0.82rem', gap: '6px', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.35)' }}
+            className="btn-secondary hide-mobile"
+            style={{ padding: '6px 10px', fontSize: '0.78rem', gap: '4px', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.35)' }}
             title="Download Android APK File"
           >
-            <Smartphone size={16} />
-            <span className="hide-mobile">Get APK</span>
+            <Smartphone size={14} />
+            <span>APK</span>
           </a>
 
           {/* Theme Toggle (Dark / Light) */}
@@ -88,10 +88,10 @@ export default function App() {
           <button
             onClick={handleLogout}
             className="btn-secondary"
-            style={{ padding: '8px 14px', fontSize: '0.85rem' }}
+            style={{ padding: '6px 10px', fontSize: '0.82rem' }}
             title="Sign Out"
           >
-            <LogOut size={16} />
+            <LogOut size={15} />
             <span className="hide-mobile">Logout</span>
           </button>
         </div>
